@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Container, Typography, Box, CircularProgress, Alert, Button, TextField, Pagination, MenuItem, FormControl, InputLabel, Select, Stack, Paper, useTheme } from '@mui/material';
-import { exportMembersToPDF } from './pdfExportHelper';
+import { exportMembersToPDF } from '../lib/pdfExportHelper';
 
 const PAGE_SIZE = 5;
 
