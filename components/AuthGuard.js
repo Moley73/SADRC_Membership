@@ -9,10 +9,25 @@ export default function AuthGuard({ children }) {
   const router = useRouter();
 
   useEffect(() => {
+    // Public routes that don't require authentication
+    const publicRoutes = ['/login', '/register', '/reset-password'];
+    
+    // If we're on a public route, skip auth check
+    if (publicRoutes.includes(router.pathname)) {
+      setLoading(false);
+      setAuthenticated(true);
+      return;
+    }
+    
+    let isMounted = true;
+    
     const checkAuth = async () => {
       try {
         // Use getSession instead of getUser for more reliable auth checking
         const { data, error } = await supabase.auth.getSession();
+        
+        // If component unmounted during async operation, don't update state
+        if (!isMounted) return;
         
         if (error) {
           // If it's just a missing session error, don't log it as an error
@@ -40,30 +55,29 @@ export default function AuthGuard({ children }) {
         setAuthenticated(true);
         setLoading(false);
       } catch (err) {
+        // If component unmounted during async operation, don't update state
+        if (!isMounted) return;
+        
         console.error('Auth check exception:', err);
         setAuthenticated(false);
         setLoading(false);
         router.push('/login');
       }
     };
-
-    // Public routes that don't require authentication
-    const publicRoutes = ['/login', '/register', '/reset-password'];
     
-    if (publicRoutes.includes(router.pathname)) {
-      setLoading(false);
-      setAuthenticated(true);
-    } else {
-      checkAuth();
-    }
+    checkAuth();
     
     // Set up auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!isMounted) return;
+        
         if (event === 'SIGNED_IN') {
           setAuthenticated(true);
+          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setAuthenticated(false);
+          setLoading(false);
           if (!publicRoutes.includes(router.pathname)) {
             router.push('/login');
           }
@@ -71,12 +85,14 @@ export default function AuthGuard({ children }) {
       }
     );
 
+    // Cleanup function to prevent state updates after unmount
     return () => {
+      isMounted = false;
       if (authListener && authListener.subscription) {
         authListener.subscription.unsubscribe();
       }
     };
-  }, [router]);
+  }, [router.pathname]);
 
   if (loading) {
     return (

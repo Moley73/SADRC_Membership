@@ -10,6 +10,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('login');
+  const [checkingSession, setCheckingSession] = useState(true);
   const router = useRouter();
 
   const handleAuth = async (e) => {
@@ -82,20 +83,42 @@ export default function Login() {
 
   // Check if user is already logged in
   useEffect(() => {
+    let isMounted = true;
+    
     const checkSession = async () => {
       try {
+        setCheckingSession(true);
         const { data } = await supabase.auth.getSession();
-        if (data?.session) {
-          router.push('/');
+        
+        if (isMounted) {
+          if (data?.session) {
+            router.push('/');
+          }
+          setCheckingSession(false);
         }
       } catch (err) {
         // Silent error handling for session check
         console.log('Session check:', err);
+        if (isMounted) {
+          setCheckingSession(false);
+        }
       }
     };
     
     checkSession();
-  }, []);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
+
+  if (checkingSession) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <>
