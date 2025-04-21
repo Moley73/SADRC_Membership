@@ -29,16 +29,16 @@ export default function AuthStatus() {
           
           // Check membership status
           try {
-            const { data: profile, error: profileError } = await supabase
-              .from('profiles')
-              .select('has_membership')
-              .eq('id', data.user.id)
-              .single();
+            const { data: memberData, error: memberError } = await supabase
+              .from('members')
+              .select('*')
+              .eq('email', data.user.email)
+              .maybeSingle();
               
-            if (profileError) {
-              console.error('Error checking membership:', profileError);
+            if (memberError) {
+              console.error('Error checking membership:', memberError);
             } else {
-              console.log('Membership status checked:', profile?.has_membership);
+              console.log('Membership status checked:', memberData ? 'Member found' : 'No membership');
             }
           } catch (membershipError) {
             console.error('Error in membership check:', membershipError);
