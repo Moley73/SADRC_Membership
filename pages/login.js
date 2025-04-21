@@ -1,86 +1,71 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
-import { Container, Box, Typography, TextField, Button, Alert, Tabs, Tab, CircularProgress } from '@mui/material';
+import { Container, Box, TextField, Button, Typography, Alert, Paper, CircularProgress } from '@mui/material';
 import Head from 'next/head';
 
 export default function Login() {
-  const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [error, setError] = useState(null);
+  const [mode, setMode] = useState('login');
   const router = useRouter();
-
-  // Check if user is already logged in
-  useEffect(() => {
-    const checkUser = async () => {
-      try {
-        setCheckingAuth(true);
-        const { data, error } = await supabase.auth.getSession();
-        if (!error && data?.session) {
-          router.push('/');
-        }
-      } catch (err) {
-        console.error('Error checking auth:', err);
-      } finally {
-        setCheckingAuth(false);
-      }
-    };
-    checkUser();
-  }, [router]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
-    setError(null);
-    setSuccess(null);
-    setLoading(true);
     
     try {
+      setLoading(true);
+      setError(null);
+      
+      // Validate input
       if (!email || !password) {
-        setError('Please enter both email and password.');
+        setError('Please enter both email and password');
         setLoading(false);
         return;
       }
       
       if (mode === 'login') {
-        console.log('Attempting login with:', email);
-        const { data, error } = await supabase.auth.signInWithPassword({ 
-          email, 
-          password 
+        // Attempt login
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password
         });
         
-        if (error) {
-          console.error('Login error:', error);
-          setError(error.message);
-        } else if (data?.session) {
-          setSuccess('Login successful! Redirecting...');
-          // Wait briefly to ensure session is stored properly
-          setTimeout(() => {
-            router.push('/');
-          }, 500);
+        if (signInError) {
+          console.log('Login error:', signInError);
+          setError(signInError.message || 'Failed to sign in. Please check your credentials.');
+          return;
+        }
+        
+        if (data?.session) {
+          console.log('Login successful, redirecting to home');
+          router.push('/');
         } else {
           setError('Login failed. Please try again.');
         }
       } else {
-        const { data, error } = await supabase.auth.signUp({ 
-          email, 
+        // Attempt sign up
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/login`
           }
         });
         
-        if (error) {
-          console.error('Signup error:', error);
-          setError(error.message);
-        } else if (data?.user) {
+        if (signUpError) {
+          console.log('Sign up error:', signUpError);
+          setError(signUpError.message || 'Failed to sign up. Please check your credentials.');
+          return;
+        }
+        
+        if (data?.user) {
           if (data.user.identities?.length === 0) {
             setError('This email is already registered. Please log in instead.');
           } else {
-            setSuccess('Sign-up successful! Please check your email to confirm your account, then log in.');
+            setError('Sign-up successful! Please check your email to confirm your account, then log in.');
             setMode('login');
           }
         } else {
@@ -88,75 +73,122 @@ export default function Login() {
         }
       }
     } catch (err) {
-      console.error('Unexpected auth error:', err);
+      console.error('Auth exception:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  if (checkingAuth) {
-    return (
-      <Container maxWidth="sm" sx={{ mt: 10, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress />
-      </Container>
-    );
-  }
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          router.push('/');
+        }
+      } catch (err) {
+        // Silent error handling for session check
+        console.log('Session check:', err);
+      }
+    };
+    
+    checkSession();
+  }, []);
 
   return (
-    <div>
+    <>
       <Head>
-        <title>SADRC Members Area - Login</title>
-        <meta name="description" content="Skegness and District Running Club Members Area" />
-        <link rel="icon" href="/favicon.ico" />
+        <title>Login | SADRC Membership Portal</title>
+        <meta name="description" content="Login to the Skegness and District Running Club Membership Portal" />
       </Head>
-      <Container maxWidth="sm" sx={{ mt: 10 }}>
-        <Box sx={{ bgcolor: 'background.paper', p: 4, borderRadius: 4, boxShadow: 4 }}>
-          <Typography variant="h4" align="center" mb={2} fontWeight={800} color="primary">SADRC Members Area</Typography>
-          <Tabs value={mode} onChange={(_, v) => setMode(v)} centered sx={{ mb: 2 }}>
-            <Tab label="Login" value="login" />
-            <Tab label="Sign Up" value="signup" />
-          </Tabs>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-          <form onSubmit={handleAuth}>
-            <TextField
-              fullWidth
-              label="Email"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              sx={{ mb: 2 }}
-              required
-              disabled={loading}
-            />
-            <TextField
-              fullWidth
-              label="Password"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              sx={{ mb: 2 }}
-              required
-              disabled={loading}
-            />
-            <Button 
-              type="submit" 
-              variant="contained" 
-              color="primary" 
-              fullWidth 
-              size="large"
-              disabled={loading}
-            >
-              {loading ? (
-                <CircularProgress size={24} color="inherit" />
-              ) : (
-                mode === 'login' ? 'Login' : 'Sign Up'
-              )}
-            </Button>
-          </form>
+      
+      <Container maxWidth="sm">
+        <Box sx={{ my: 8 }}>
+          <Paper elevation={3} sx={{ p: 4 }}>
+            <Typography variant="h4" component="h1" align="center" gutterBottom>
+              SADRC Membership Portal
+            </Typography>
+            
+            <Typography variant="h5" component="h2" align="center" gutterBottom>
+              {mode === 'login' ? 'Login' : 'Sign Up'}
+            </Typography>
+            
+            {error && (
+              <Alert severity="error" sx={{ mb: 3 }}>
+                {error}
+              </Alert>
+            )}
+            
+            <Box component="form" onSubmit={handleAuth} sx={{ mt: 2 }}>
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                id="email"
+                label="Email Address"
+                name="email"
+                autoComplete="email"
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+              />
+              
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                name="password"
+                label="Password"
+                type="password"
+                id="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+              />
+              
+              <Button
+                type="submit"
+                fullWidth
+                variant="contained"
+                sx={{ mt: 3, mb: 2 }}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} /> : mode === 'login' ? 'Sign In' : 'Sign Up'}
+              </Button>
+              
+              <Box sx={{ mt: 2, textAlign: 'center' }}>
+                <Typography variant="body2">
+                  {mode === 'login' ? "Don't have an account? Contact the club secretary." : 'Already have an account?'}
+                </Typography>
+                
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
+                  sx={{ mt: 1 }}
+                >
+                  {mode === 'login' ? 'Sign Up' : 'Login'}
+                </Button>
+                
+                {mode === 'login' && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => router.push('/reset-password')}
+                    sx={{ mt: 1 }}
+                  >
+                    Forgot password?
+                  </Button>
+                )}
+              </Box>
+            </Box>
+          </Paper>
         </Box>
       </Container>
-    </div>
+    </>
   );
 }
