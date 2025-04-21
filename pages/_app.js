@@ -9,6 +9,7 @@ import AdminNavButton from '../components/AdminNavButton';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
 import MenuIcon from '@mui/icons-material/Menu';
+import Head from 'next/head';
 
 export default function App({ Component, pageProps }) {
   const [mode, setMode] = useState('dark');
@@ -97,6 +98,9 @@ export default function App({ Component, pageProps }) {
   return (
     <ColorModeContext.Provider value={colorMode}>
       <ThemeProvider theme={theme}>
+        <Head>
+          <link rel="icon" href="/favicon.ico" />
+        </Head>
         <CssBaseline />
         <AppBar position="static" color="primary" elevation={1}>
           <Toolbar sx={{ justifyContent: 'space-between' }}>
@@ -130,11 +134,15 @@ export default function App({ Component, pageProps }) {
                 <Box sx={{ display: 'flex', gap: 2 }}>
                   <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/')}>HOME</Button>
                   <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/resources')}>RESOURCES</Button>
+                  <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/awards')}>AWARDS</Button>
                   {isAdmin && (
                     <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/admin')}>ADMIN</Button>
                   )}
                   {isSuperAdmin && (
                     <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/manage')}>MANAGE</Button>
+                  )}
+                  {isSuperAdmin && (
+                    <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/awards/manage')}>MANAGE AWARDS</Button>
                   )}
                 </Box>
               )}
@@ -163,11 +171,15 @@ export default function App({ Component, pageProps }) {
           >
             <MenuItem onClick={() => handleNavigation('/')}>HOME</MenuItem>
             <MenuItem onClick={() => handleNavigation('/resources')}>RESOURCES</MenuItem>
+            <MenuItem onClick={() => handleNavigation('/awards')}>AWARDS</MenuItem>
             {isAdmin && (
               <MenuItem onClick={() => handleNavigation('/admin')}>ADMIN</MenuItem>
             )}
             {isSuperAdmin && (
               <MenuItem onClick={() => handleNavigation('/manage')}>MANAGE</MenuItem>
+            )}
+            {isSuperAdmin && (
+              <MenuItem onClick={() => handleNavigation('/awards/manage')}>MANAGE AWARDS</MenuItem>
             )}
           </Menu>
         )}
