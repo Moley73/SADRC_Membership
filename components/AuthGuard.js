@@ -17,14 +17,23 @@ export default function AuthGuard({ children, adminOnly = false, superAdminOnly 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data } = await supabase.auth.getUser();
+        // Get current session
+        const { data, error: sessionError } = await supabase.auth.getSession();
         
-        if (!data?.user) {
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          router.replace('/login');
+          return;
+        }
+        
+        if (!data?.session?.user) {
+          console.log('No active session found');
           router.replace('/login');
           return;
         }
 
-        setUser(data.user);
+        const user = data.session.user;
+        setUser(user);
 
         // If this is an admin-only or super-admin-only page, check permissions
         if (adminOnly || superAdminOnly) {
@@ -33,13 +42,13 @@ export default function AuthGuard({ children, adminOnly = false, superAdminOnly 
             const { data: adminData, error } = await supabase
               .from('admin_list')
               .select('role')
-              .eq('email', data.user.email)
+              .eq('email', user.email)
               .maybeSingle();
               
             if (error) {
               console.error('Error fetching admin status:', error);
               // Fallback to hardcoded admin list
-              const isUserAdmin = FALLBACK_ADMIN_EMAILS.includes(data.user.email);
+              const isUserAdmin = FALLBACK_ADMIN_EMAILS.includes(user.email);
               
               if (superAdminOnly && !isUserAdmin) {
                 setError('Access denied: Only super administrators can access this page.');
@@ -69,7 +78,7 @@ export default function AuthGuard({ children, adminOnly = false, superAdminOnly 
           } catch (err) {
             console.error('Error checking admin status:', err);
             // Fallback to hardcoded admin check
-            const isUserAdmin = FALLBACK_ADMIN_EMAILS.includes(data.user.email);
+            const isUserAdmin = FALLBACK_ADMIN_EMAILS.includes(user.email);
             
             if (superAdminOnly && !isUserAdmin) {
               setError('Access denied: Only super administrators can access this page.');

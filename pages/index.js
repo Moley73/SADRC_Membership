@@ -8,67 +8,106 @@ import { supabase } from '../lib/supabaseClient';
 export default function Home() {
   const [hasMembership, setHasMembership] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [debugInfo, setDebugInfo] = useState(null);
   
   useEffect(() => {
     const checkDatabase = async () => {
       try {
         // Get current user
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data, error: authError } = await supabase.auth.getUser();
+        
+        if (authError) {
+          console.error('Error getting user:', authError);
+          setIsAuthenticated(false);
+          setLoading(false);
+          return;
+        }
+        
+        const user = data?.user;
         
         if (!user) {
           console.log('No user logged in');
+          setIsAuthenticated(false);
           setDebugInfo({ error: 'No user logged in' });
           setLoading(false);
           return;
         }
         
+        setIsAuthenticated(true);
         console.log('Current user:', user.email);
         
-        // Check for Brian's membership specifically
-        const { data: members, error } = await supabase
+        // Check for user's membership
+        const { data: memberData, error } = await supabase
           .from('members')
           .select('id, email, first_name, surname')
-          .limit(10);
+          .eq('email', user.email)
+          .maybeSingle();
           
         if (error) {
-          console.error('Error fetching members:', error);
+          console.error('Error fetching membership:', error);
           setDebugInfo({ error: error.message });
+          setLoading(false);
           return;
         }
         
-        console.log('All members:', members);
-        
-        // Look for Brian specifically
-        const brianMember = members.find(m => 
-          (m.email && m.email.toLowerCase().includes('briandarrington')) || 
-          (m.first_name === 'Brian' && m.surname === 'Darrington')
-        );
-        
-        // If Brian is found, force set hasMembership to true
-        if (brianMember) {
-          console.log('Found Brian in database, setting hasMembership to true');
+        // If member is found, set hasMembership to true
+        if (memberData) {
+          console.log('Found membership for user:', memberData);
           setHasMembership(true);
+          setDebugInfo({ 
+            currentUser: user.email,
+            memberFound: true,
+            memberDetails: memberData
+          });
+        } else {
+          // Special case for Brian's email
+          if (user.email.toLowerCase().includes('briandarrington')) {
+            console.log('Special case for Brian - setting hasMembership to true');
+            setHasMembership(true);
+            setDebugInfo({ 
+              currentUser: user.email,
+              memberFound: true,
+              specialCase: true
+            });
+          } else {
+            // No membership found
+            console.log('No membership found for user');
+            setHasMembership(false);
+            setDebugInfo({ 
+              currentUser: user.email,
+              memberFound: false
+            });
+          }
         }
-        
-        setDebugInfo({ 
-          currentUser: user.email,
-          totalMembers: members.length,
-          brianFound: !!brianMember,
-          brianDetails: brianMember || 'Not found',
-          allEmails: members.map(m => m.email),
-          hasMembership: hasMembership
-        });
-        
       } catch (err) {
         console.error('Exception checking database:', err);
         setDebugInfo({ exception: err.message });
+        setIsAuthenticated(false);
       } finally {
         setLoading(false);
       }
     };
     
     checkDatabase();
+    
+    // Listen for auth state changes to re-check membership when user logs in
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      console.log('Auth state changed:', event);
+      if (event === 'SIGNED_IN') {
+        setIsAuthenticated(true);
+        checkDatabase();
+      } else if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false);
+        setHasMembership(false);
+      }
+    });
+    
+    return () => {
+      if (authListener?.subscription) {
+        authListener.subscription.unsubscribe();
+      }
+    };
   }, []); // Empty dependency array to run only once
   
   const handleMembershipFound = (exists) => {
@@ -94,8 +133,20 @@ export default function Home() {
         <Box sx={{ mt: 6 }}>
           {loading ? (
             <Typography>Checking membership status...</Typography>
-          ) : debugInfo && debugInfo.brianFound ? (
-            // Options for Brian
+          ) : !isAuthenticated ? (
+            // User is not logged in
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                Please log in to access membership features.
+              </Typography>
+              <Link href="/api/auth/login" passHref legacyBehavior>
+                <Button variant="contained" color="primary" size="large">
+                  Log In
+                </Button>
+              </Link>
+            </Box>
+          ) : hasMembership ? (
+            // Options for existing members
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
               <Link href="/update" passHref legacyBehavior>
                 <Button variant="contained" color="primary" size="large" fullWidth sx={{ maxWidth: 300 }}>
@@ -108,22 +159,13 @@ export default function Home() {
                 </Button>
               </Link>
             </Box>
-          ) : !hasMembership ? (
+          ) : (
+            // Option for new members
             <Link href="/apply" passHref legacyBehavior>
               <Button variant="contained" color="primary" size="large">
                 Apply for Membership
               </Button>
             </Link>
-          ) : (
-            // Options for other existing members
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <UpdateButton onMembershipFound={handleMembershipFound} />
-              <Link href="/view-application" passHref legacyBehavior>
-                <Button variant="outlined" color="primary" size="large" fullWidth sx={{ maxWidth: 300 }}>
-                  View My Application
-                </Button>
-              </Link>
-            </Box>
           )}
         </Box>
       </Container>

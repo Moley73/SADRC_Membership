@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
-import { Container, Box, Typography, TextField, Button, Alert, Tabs, Tab } from '@mui/material';
+import { Container, Box, Typography, TextField, Button, Alert, Tabs, Tab, CircularProgress } from '@mui/material';
 import Head from 'next/head';
 
 export default function Login() {
@@ -10,33 +10,98 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const router = useRouter();
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        setCheckingAuth(true);
+        const { data, error } = await supabase.auth.getSession();
+        if (!error && data?.session) {
+          router.push('/');
+        }
+      } catch (err) {
+        console.error('Error checking auth:', err);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+    checkUser();
+  }, [router]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-    if (!email || !password) {
-      setError('Please enter both email and password.');
-      return;
-    }
-    if (mode === 'login') {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setError(error.message);
-      } else {
-        setSuccess('Login successful! Redirecting...');
-        setTimeout(() => router.push('/'), 1000);
+    setLoading(true);
+    
+    try {
+      if (!email || !password) {
+        setError('Please enter both email and password.');
+        setLoading(false);
+        return;
       }
-    } else {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        setError(error.message);
+      
+      if (mode === 'login') {
+        console.log('Attempting login with:', email);
+        const { data, error } = await supabase.auth.signInWithPassword({ 
+          email, 
+          password 
+        });
+        
+        if (error) {
+          console.error('Login error:', error);
+          setError(error.message);
+        } else if (data?.session) {
+          setSuccess('Login successful! Redirecting...');
+          // Wait briefly to ensure session is stored properly
+          setTimeout(() => {
+            router.push('/');
+          }, 500);
+        } else {
+          setError('Login failed. Please try again.');
+        }
       } else {
-        setSuccess('Sign-up successful! Please check your email to confirm your account, then log in.');
+        const { data, error } = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/login`
+          }
+        });
+        
+        if (error) {
+          console.error('Signup error:', error);
+          setError(error.message);
+        } else if (data?.user) {
+          if (data.user.identities?.length === 0) {
+            setError('This email is already registered. Please log in instead.');
+          } else {
+            setSuccess('Sign-up successful! Please check your email to confirm your account, then log in.');
+            setMode('login');
+          }
+        } else {
+          setError('Sign-up failed. Please try again.');
+        }
       }
+    } catch (err) {
+      console.error('Unexpected auth error:', err);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <Container maxWidth="sm" sx={{ mt: 10, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Container>
+    );
+  }
 
   return (
     <div>
@@ -63,6 +128,7 @@ export default function Login() {
               onChange={e => setEmail(e.target.value)}
               sx={{ mb: 2 }}
               required
+              disabled={loading}
             />
             <TextField
               fullWidth
@@ -72,9 +138,21 @@ export default function Login() {
               onChange={e => setPassword(e.target.value)}
               sx={{ mb: 2 }}
               required
+              disabled={loading}
             />
-            <Button type="submit" variant="contained" color="primary" fullWidth size="large">
-              {mode === 'login' ? 'Login' : 'Sign Up'}
+            <Button 
+              type="submit" 
+              variant="contained" 
+              color="primary" 
+              fullWidth 
+              size="large"
+              disabled={loading}
+            >
+              {loading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                mode === 'login' ? 'Login' : 'Sign Up'
+              )}
             </Button>
           </form>
         </Box>
