@@ -28,6 +28,7 @@ import {
   Container, Typography, TextField, Button, Checkbox, FormControlLabel, Grid, Box, MenuItem, Alert, iframe
 } from '@mui/material';
 import SignaturePad from '../components/SignaturePad';
+import Head from 'next/head';
 
 const membershipOptions = [
   { label: 'Club Membership (£10 per year)', value: 'club' },
@@ -120,7 +121,8 @@ export default function Apply() {
         email,
         has_medical_condition: !!data.medical_conditions,
         agreed_policies: !!data.agreed_policies,
-        opt_out_competitions: !!data.opt_out_competitions,
+        opt_in_competitions: !!data.opt_in_competitions,
+        opt_in_aaga_challenge: !!data.opt_in_aaga_challenge,
         opt_out_photos: !!data.opt_out_photos,
         signature_url: signature_url || null,
         signed_at: new Date().toISOString(),
@@ -143,6 +145,11 @@ export default function Apply() {
   const isUnder18 = dob && (new Date().getFullYear() - new Date(dob).getFullYear() < 18);
 
   return (
+    <Head>
+      <title>SADRC Members Area - Apply</title>
+      <meta name="description" content="Apply for membership to Skegness and District Running Club" />
+      <link rel="icon" href="/favicon.ico" />
+    </Head>
     <Container maxWidth="md" sx={{ mt: 8, mb: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '90vh' }}>
       <Box sx={{
         width: '100%',
@@ -156,7 +163,7 @@ export default function Apply() {
         gap: 3,
       }}>
         <Typography variant="h4" gutterBottom sx={{ fontWeight: 800, color: 'primary.main', textAlign: 'center', letterSpacing: 2 }}>
-          Membership Application
+          SADRC Members Area
         </Typography>
         {submitted && <Alert severity="success">Application submitted!</Alert>}
         {error && <Alert severity="error">{error}</Alert>}
@@ -282,10 +289,10 @@ export default function Apply() {
             )}
             {/* Opt-out options */}
             <Grid item xs={12} sm={6}>
-              <Controller name="opt_out_competitions" control={control} defaultValue={false} render={({ field }) => (
+              <Controller name="opt_in_competitions" control={control} defaultValue={false} render={({ field }) => (
                 <FormControlLabel
                   control={<Checkbox {...field} checked={field.value} />}
-                  label="Opt out of club competitions and league tables"
+                  label="Opt in to club competitions and league tables"
                 />
               )} />
             </Grid>
@@ -294,6 +301,14 @@ export default function Apply() {
                 <FormControlLabel
                   control={<Checkbox {...field} checked={field.value} />}
                   label="Opt out of having photographs displayed on the Club's social media pages"
+                />
+              )} />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Controller name="opt_in_aaga_challenge" control={control} defaultValue={false} render={({ field }) => (
+                <FormControlLabel
+                  control={<Checkbox {...field} checked={field.value} />}
+                  label="Opt in to the AaGA Challenge"
                 />
               )} />
             </Grid>

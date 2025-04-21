@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
 import { Container, Box, Typography, TextField, Button, Alert, Tabs, Tab } from '@mui/material';
+import Head from 'next/head';
 
 export default function Login() {
   const [mode, setMode] = useState('login');
@@ -25,7 +26,7 @@ export default function Login() {
         setError(error.message);
       } else {
         setSuccess('Login successful! Redirecting...');
-        setTimeout(() => router.push('/apply'), 1000);
+        setTimeout(() => router.push('/'), 1000);
       }
     } else {
       const { error } = await supabase.auth.signUp({ email, password });
@@ -38,39 +39,46 @@ export default function Login() {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ mt: 10 }}>
-      <Box sx={{ bgcolor: 'background.paper', p: 4, borderRadius: 4, boxShadow: 4 }}>
-        <Typography variant="h4" align="center" mb={2} fontWeight={800} color="primary">Member Login</Typography>
-        <Tabs value={mode} onChange={(_, v) => setMode(v)} centered sx={{ mb: 2 }}>
-          <Tab label="Login" value="login" />
-          <Tab label="Sign Up" value="signup" />
-        </Tabs>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-        <form onSubmit={handleAuth}>
-          <TextField
-            fullWidth
-            label="Email"
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            sx={{ mb: 2 }}
-            required
-          />
-          <TextField
-            fullWidth
-            label="Password"
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            sx={{ mb: 2 }}
-            required
-          />
-          <Button type="submit" variant="contained" color="primary" fullWidth size="large">
-            {mode === 'login' ? 'Login' : 'Sign Up'}
-          </Button>
-        </form>
-      </Box>
-    </Container>
+    <div>
+      <Head>
+        <title>SADRC Members Area - Login</title>
+        <meta name="description" content="Skegness and District Running Club Members Area" />
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
+      <Container maxWidth="sm" sx={{ mt: 10 }}>
+        <Box sx={{ bgcolor: 'background.paper', p: 4, borderRadius: 4, boxShadow: 4 }}>
+          <Typography variant="h4" align="center" mb={2} fontWeight={800} color="primary">SADRC Members Area</Typography>
+          <Tabs value={mode} onChange={(_, v) => setMode(v)} centered sx={{ mb: 2 }}>
+            <Tab label="Login" value="login" />
+            <Tab label="Sign Up" value="signup" />
+          </Tabs>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+          <form onSubmit={handleAuth}>
+            <TextField
+              fullWidth
+              label="Email"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              sx={{ mb: 2 }}
+              required
+            />
+            <TextField
+              fullWidth
+              label="Password"
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              sx={{ mb: 2 }}
+              required
+            />
+            <Button type="submit" variant="contained" color="primary" fullWidth size="large">
+              {mode === 'login' ? 'Login' : 'Sign Up'}
+            </Button>
+          </form>
+        </Box>
+      </Container>
+    </div>
   );
 }

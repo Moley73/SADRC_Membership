@@ -2,7 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/test-supabase": "pages/test-supabase.js",
-  "/apply": "pages/apply.js",
+  "/resources": "pages/resources.js",
+  "/": "pages/index.js",
+  "/manage": "pages/manage.js",
   "/admin": "pages/admin.js"
 }
