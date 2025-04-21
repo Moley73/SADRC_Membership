@@ -20,6 +20,7 @@ export default function NominationSection({ categories }) {
     reason: ''
   });
   const [loadingNominations, setLoadingNominations] = useState(true);
+  const [tablesExist, setTablesExist] = useState(true);
 
   useEffect(() => {
     // Fetch club members
@@ -47,6 +48,17 @@ export default function NominationSection({ categories }) {
         
         if (!res.ok) {
           const errorData = await res.json();
+          
+          // Check if the error is related to missing tables
+          if (errorData.error && (
+              errorData.error.includes("relation") || 
+              errorData.error.includes("does not exist") ||
+              errorData.error.includes("42P01"))) {
+            console.log('Awards tables not yet created in database');
+            setTablesExist(false);
+            return;
+          }
+          
           throw new Error(errorData.error || 'Failed to fetch nominations');
         }
         
@@ -54,6 +66,12 @@ export default function NominationSection({ categories }) {
         setMyNominations(nominations);
       } catch (err) {
         console.error('Error fetching my nominations:', err);
+        // Don't show error UI for missing tables
+        if (err.message && (
+            err.message.includes("relation") || 
+            err.message.includes("does not exist"))) {
+          setTablesExist(false);
+        }
       } finally {
         setLoadingNominations(false);
       }
@@ -82,6 +100,11 @@ export default function NominationSection({ categories }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!tablesExist) {
+      setError("The awards system is not yet fully set up in the database. Please try again later.");
+      return;
+    }
     
     try {
       setLoading(true);
@@ -145,10 +168,7 @@ export default function NominationSection({ categories }) {
 
   const formatMemberName = (email) => {
     const member = members.find(m => m.email === email);
-    if (member) {
-      return `${member.first_name} ${member.surname}`;
-    }
-    return email;
+    return member ? `${member.first_name} ${member.surname}` : email;
   };
 
   // Check if user already nominated a category
@@ -156,40 +176,28 @@ export default function NominationSection({ categories }) {
     return myNominations.some(nom => nom.category_id === categoryId);
   };
 
-  return (
-    <Box sx={{ mt: 4 }}>
-      <Typography variant="h5" gutterBottom>
-        Nominate Club Members
-      </Typography>
-      
-      <Typography variant="body1" paragraph>
-        Nominate your fellow club members for awards. You can nominate multiple people in each category.
-        All nominations will be reviewed by the club committee before being approved for voting.
-      </Typography>
-      
-      {error && (
-        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
-          {error}
+  // If the awards tables don't exist yet, show a message
+  if (!tablesExist) {
+    return (
+      <Box sx={{ my: 4 }}>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          The awards system is currently being set up. Please check back later.
         </Alert>
-      )}
-      
-      {success && (
-        <Alert severity="success" onClose={() => setSuccess(null)} sx={{ mb: 2 }}>
-          {success}
-        </Alert>
-      )}
+      </Box>
+    );
+  }
 
-      <Accordion
-        expanded={expanded === 'nomination'}
-        onChange={handleAccordionChange('nomination')}
-        sx={{ mb: 4 }}
+  return (
+    <Box sx={{ my: 4 }}>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+      
+      <Accordion 
+        expanded={expanded === 'nominationPanel'} 
+        onChange={handleAccordionChange('nominationPanel')}
       >
-        <AccordionSummary
-          expandIcon={<ExpandMoreIcon />}
-          aria-controls="nomination-content"
-          id="nomination-header"
-        >
-          <Typography variant="subtitle1" fontWeight="bold">Make a Nomination</Typography>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="h6">Make a Nomination</Typography>
         </AccordionSummary>
         <AccordionDetails>
           <form onSubmit={handleSubmit}>
