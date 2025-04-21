@@ -41,6 +41,33 @@ export default async function handler(req, res) {
     console.log('Authenticated user:', user.email);
 
     try {
+      // Check if award tables exist before proceeding
+      try {
+        // Try to query the award_settings table
+        const { data: settingsData, error: settingsCheckError } = await supabaseAdmin
+          .from('award_settings')
+          .select('id')
+          .limit(1);
+          
+        // If we get a specific error about the table not existing, return a specific response
+        if (settingsCheckError && 
+            (settingsCheckError.code === '42P01' || 
+             settingsCheckError.message.includes('relation') || 
+             settingsCheckError.message.includes('does not exist'))) {
+          console.log('Award tables do not exist yet');
+          return res.status(503).json({ 
+            error: 'Award system database tables are not yet set up',
+            setupRequired: true
+          });
+        }
+      } catch (checkError) {
+        console.error('Error checking if award tables exist:', checkError);
+        return res.status(503).json({ 
+          error: 'Award system database tables are not yet set up',
+          setupRequired: true
+        });
+      }
+      
       if (req.method === 'GET') {
         // Get current award settings to get the active year
         const { data: settings, error: settingsError } = await supabaseAdmin
@@ -121,7 +148,7 @@ export default async function handler(req, res) {
         }
         
         if (!reason || reason.trim().length < 10) {
-          return res.status(400).json({ error: 'Please provide a more detailed reason for your nomination (at least 10 characters)' });
+          return res.status(400).json({ error: 'A detailed reason (at least 10 characters) is required' });
         }
         
         // Get current award settings
