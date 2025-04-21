@@ -6,6 +6,8 @@
   NODE_VERSION = "18"
   NPM_VERSION = "9"
   NEXT_USE_NETLIFY_EDGE = "true"
+  # Exclude Supabase public keys from secret scanning
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
