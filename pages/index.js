@@ -1,5 +1,5 @@
 import Head from 'next/head';
-import { Container, Typography, Box, Button } from '@mui/material';
+import { Container, Typography, Box, Button, Paper, Grid, Alert, CircularProgress } from '@mui/material';
 import Link from 'next/link';
 import UpdateButton from '../components/UpdateButton';
 import { useState, useEffect } from 'react';
@@ -10,7 +10,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [debugInfo, setDebugInfo] = useState(null);
-  
+  const [error, setError] = useState(null);
+
   useEffect(() => {
     const checkDatabase = async () => {
       try {
@@ -38,52 +39,68 @@ export default function Home() {
         console.log('Current user:', user.email);
         
         // Check for user's membership
-        const { data: memberData, error } = await supabase
-          .from('members')
-          .select('id, email, first_name, surname')
-          .eq('email', user.email)
-          .maybeSingle();
-          
-        if (error) {
-          console.error('Error fetching membership:', error);
-          setDebugInfo({ error: error.message });
-          setLoading(false);
-          return;
-        }
-        
-        // If member is found, set hasMembership to true
-        if (memberData) {
-          console.log('Found membership for user:', memberData);
-          setHasMembership(true);
-          setDebugInfo({ 
-            currentUser: user.email,
-            memberFound: true,
-            memberDetails: memberData
-          });
-        } else {
-          // Special case for Brian's email
-          if (user.email.toLowerCase().includes('briandarrington')) {
-            console.log('Special case for Brian - setting hasMembership to true');
+        try {
+          const { data: memberData, error: memberError } = await supabase
+            .from('members')
+            .select('id, email, first_name, surname')
+            .eq('email', user.email)
+            .maybeSingle();
+            
+          if (memberError) {
+            // If the error is that the table doesn't exist, don't show an error
+            if (memberError.code === '42P01' || 
+                memberError.message.includes('relation') || 
+                memberError.message.includes('does not exist')) {
+              console.log('Members table does not exist yet');
+              setHasMembership(false);
+              setDebugInfo({ error: 'Members table does not exist yet' });
+            } else {
+              console.error('Error fetching membership:', memberError);
+              setError('Failed to check membership status');
+            }
+          } else if (memberData) {
+            console.log('Found membership for user:', memberData);
             setHasMembership(true);
             setDebugInfo({ 
               currentUser: user.email,
               memberFound: true,
-              specialCase: true
+              memberDetails: memberData
             });
           } else {
-            // No membership found
-            console.log('No membership found for user');
+            // Special case for Brian's email
+            if (user.email.toLowerCase().includes('briandarrington')) {
+              console.log('Special case for Brian - setting hasMembership to true');
+              setHasMembership(true);
+              setDebugInfo({ 
+                currentUser: user.email,
+                memberFound: true,
+                specialCase: true
+              });
+            } else {
+              // No membership found
+              console.log('No membership found for user');
+              setHasMembership(false);
+              setDebugInfo({ 
+                currentUser: user.email,
+                memberFound: false
+              });
+            }
+          }
+        } catch (err) {
+          console.error('Error checking membership:', err);
+          // Don't show error UI for missing tables
+          if (err.message && (
+              err.message.includes("relation") || 
+              err.message.includes("does not exist"))) {
             setHasMembership(false);
-            setDebugInfo({ 
-              currentUser: user.email,
-              memberFound: false
-            });
+            setDebugInfo({ error: 'Members table does not exist yet' });
+          } else {
+            setError('Failed to check membership status');
           }
         }
       } catch (err) {
         console.error('Exception checking database:', err);
-        setDebugInfo({ exception: err.message });
-        setIsAuthenticated(false);
+        setError('An unexpected error occurred');
       } finally {
         setLoading(false);
       }
@@ -166,6 +183,11 @@ export default function Home() {
                 Apply for Membership
               </Button>
             </Link>
+          )}
+          {error && (
+            <Alert severity="error" sx={{ mt: 4 }}>
+              {error}
+            </Alert>
           )}
         </Box>
       </Container>

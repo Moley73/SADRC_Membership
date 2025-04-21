@@ -53,7 +53,8 @@ export default function NominationSection({ categories }) {
           if (errorData.error && (
               errorData.error.includes("relation") || 
               errorData.error.includes("does not exist") ||
-              errorData.error.includes("42P01"))) {
+              errorData.error.includes("42P01") ||
+              errorData.error.includes("not yet set up"))) {
             console.log('Awards tables not yet created in database');
             setTablesExist(false);
             return;
@@ -139,12 +140,25 @@ export default function NominationSection({ categories }) {
         body: JSON.stringify(formState)
       });
       
+      const responseData = await res.json();
+      
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to submit nomination');
+        // Check if the error is related to missing tables
+        if (responseData.error && (
+            responseData.error.includes("relation") || 
+            responseData.error.includes("does not exist") ||
+            responseData.error.includes("42P01") ||
+            responseData.error.includes("not yet set up") ||
+            responseData.setupRequired)) {
+          console.log('Awards tables not yet created in database');
+          setTablesExist(false);
+          throw new Error("The awards system is not yet fully set up in the database. Please try again later.");
+        }
+        
+        throw new Error(responseData.error || 'Failed to submit nomination');
       }
       
-      const newNomination = await res.json();
+      const newNomination = responseData;
       
       // Update my nominations list
       setMyNominations(prev => [...prev, newNomination]);
