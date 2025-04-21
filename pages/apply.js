@@ -145,203 +145,205 @@ export default function Apply() {
   const isUnder18 = dob && (new Date().getFullYear() - new Date(dob).getFullYear() < 18);
 
   return (
-    <Head>
-      <title>SADRC Members Area - Apply</title>
-      <meta name="description" content="Apply for membership to Skegness and District Running Club" />
-      <link rel="icon" href="/favicon.ico" />
-    </Head>
-    <Container maxWidth="md" sx={{ mt: 8, mb: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '90vh' }}>
-      <Box sx={{
-        width: '100%',
-        maxWidth: 700,
-        bgcolor: 'background.paper',
-        boxShadow: 6,
-        borderRadius: 4,
-        p: { xs: 2, md: 4 },
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 3,
-      }}>
-        <Typography variant="h4" gutterBottom sx={{ fontWeight: 800, color: 'primary.main', textAlign: 'center', letterSpacing: 2 }}>
-          SADRC Members Area
-        </Typography>
-        {submitted && <Alert severity="success">Application submitted!</Alert>}
-        {error && <Alert severity="error">{error}</Alert>}
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <Controller name="first_name" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
-                <TextField {...field} label="First Name" fullWidth required />
-              )} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Controller name="surname" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
-                <TextField {...field} label="Surname" fullWidth required />
-              )} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Controller name="country_of_birth" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
-                <TextField {...field} label="Country of Birth" fullWidth required />
-              )} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Controller name="address" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
-                <TextField {...field} label="Address" fullWidth required />
-              )} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                required
-                fullWidth
-                label="Post Code"
-                name="post_code"
-                value={postCode || ''}
-                onChange={e => setPostCode(e.target.value)}
-                margin="normal"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Controller name="date_of_birth" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
-                <TextField {...field} label="Date of Birth" type="date" InputLabelProps={{ shrink: true }} fullWidth required />
-              )} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Controller name="sex" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
-                <TextField {...field} label="Sex/Gender" select fullWidth required>
-                  <MenuItem value="male">Male</MenuItem>
-                  <MenuItem value="female">Female</MenuItem>
-                  <MenuItem value="non-binary">Non-binary</MenuItem>
-                  <MenuItem value="prefer-not-to-say">Prefer not to say</MenuItem>
-                </TextField>
-              )} />
-            </Grid>
-            {/* If under 18, show parent/guardian signature */}
-            {isUnder18 && (
-              <Grid item xs={12}>
-                <Controller name="parent_guardian_signature" control={control} defaultValue="" rules={{ required: isUnder18 }} render={({ field }) => (
-                  <TextField {...field} label="Parent/Guardian Name and Signature (required for under 18)" fullWidth required />
+    <>
+      <Head>
+        <title>SADRC Members Area - Apply</title>
+        <meta name="description" content="Apply for membership to Skegness and District Running Club" />
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
+      <Container maxWidth="md" sx={{ mt: 8, mb: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '90vh' }}>
+        <Box sx={{
+          width: '100%',
+          maxWidth: 700,
+          bgcolor: 'background.paper',
+          boxShadow: 6,
+          borderRadius: 4,
+          p: { xs: 2, md: 4 },
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 3,
+        }}>
+          <Typography variant="h4" gutterBottom sx={{ fontWeight: 800, color: 'primary.main', textAlign: 'center', letterSpacing: 2 }}>
+            SADRC Members Area
+          </Typography>
+          {submitted && <Alert severity="success">Application submitted!</Alert>}
+          {error && <Alert severity="error">{error}</Alert>}
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Controller name="first_name" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
+                  <TextField {...field} label="First Name" fullWidth required />
                 )} />
               </Grid>
-            )}
-            <Grid item xs={12} sm={6}>
-              <Controller name="telephone" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
-                <TextField {...field} label="Telephone Number" fullWidth required />
-              )} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Controller name="emergency_name" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
-                <TextField {...field} label="Emergency Contact Name" fullWidth required />
-              )} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Controller name="emergency_phone" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
-                <TextField {...field} label="Emergency Contact Phone" fullWidth required />
-              )} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Controller name="emergency_relationship" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
-                <TextField {...field} label="Emergency Contact Relationship" fullWidth required />
-              )} />
-            </Grid>
-            <Grid item xs={12}>
-              <Controller name="medical_conditions" control={control} defaultValue="" render={({ field }) => (
-                <TextField {...field} label="Medical Conditions (leave blank if none)" fullWidth />
-              )} />
-            </Grid>
-            {/* Membership Options */}
-            <Grid item xs={12}>
-              <Controller name="membership_type" control={control} defaultValue="club" render={({ field }) => (
-                <TextField {...field} label="Membership Option" select fullWidth required>
-                  {membershipOptions.map((option) => (
-                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-                  ))}
-                </TextField>
-              )} />
-            </Grid>
-            {/* Policy Acknowledgement */}
-            <Grid item xs={12}>
-              <Controller name="agreed_policies" control={control} defaultValue={false} rules={{ required: true }} render={({ field }) => (
-                <FormControlLabel
-                  control={<Checkbox {...field} checked={field.value} />}
-                  label={
-                    <>
-                      I agree to adhere to the SADRC values and the England Athletics Code of Conduct for Senior Athletes (
-                      <a href="#code-pdf" onClick={e => { e.preventDefault(); setShowCodePdf(v => !v); }} style={{ color: '#ff9800', cursor: 'pointer' }}>read code</a>
-                      ).
-                    </>
-                  }
+              <Grid item xs={12} sm={6}>
+                <Controller name="surname" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
+                  <TextField {...field} label="Surname" fullWidth required />
+                )} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="country_of_birth" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
+                  <TextField {...field} label="Country of Birth" fullWidth required />
+                )} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="address" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
+                  <TextField {...field} label="Address" fullWidth required />
+                )} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
                   required
+                  fullWidth
+                  label="Post Code"
+                  name="post_code"
+                  value={postCode || ''}
+                  onChange={e => setPostCode(e.target.value)}
+                  margin="normal"
                 />
-              )} />
-            </Grid>
-            {showCodePdf && (
-              <Grid item xs={12} id="code-pdf">
-                <Box sx={{ my: 2, border: '2px solid #ff9800', borderRadius: 2, overflow: 'hidden', bgcolor: 'background.paper' }}>
-                  <iframe
-                    src="/pdfs/codes-of-conduct-senior-athletes-1%20(1).pdf"
-                    title="Code of Conduct PDF"
-                    width="100%"
-                    height="600px"
-                    style={{ border: 'none' }}
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="date_of_birth" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
+                  <TextField {...field} label="Date of Birth" type="date" InputLabelProps={{ shrink: true }} fullWidth required />
+                )} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="sex" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
+                  <TextField {...field} label="Sex/Gender" select fullWidth required>
+                    <MenuItem value="male">Male</MenuItem>
+                    <MenuItem value="female">Female</MenuItem>
+                    <MenuItem value="non-binary">Non-binary</MenuItem>
+                    <MenuItem value="prefer-not-to-say">Prefer not to say</MenuItem>
+                  </TextField>
+                )} />
+              </Grid>
+              {/* If under 18, show parent/guardian signature */}
+              {isUnder18 && (
+                <Grid item xs={12}>
+                  <Controller name="parent_guardian_signature" control={control} defaultValue="" rules={{ required: isUnder18 }} render={({ field }) => (
+                    <TextField {...field} label="Parent/Guardian Name and Signature (required for under 18)" fullWidth required />
+                  )} />
+                </Grid>
+              )}
+              <Grid item xs={12} sm={6}>
+                <Controller name="telephone" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
+                  <TextField {...field} label="Telephone Number" fullWidth required />
+                )} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="emergency_name" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
+                  <TextField {...field} label="Emergency Contact Name" fullWidth required />
+                )} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="emergency_phone" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
+                  <TextField {...field} label="Emergency Contact Phone" fullWidth required />
+                )} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="emergency_relationship" control={control} defaultValue="" rules={{ required: true }} render={({ field }) => (
+                  <TextField {...field} label="Emergency Contact Relationship" fullWidth required />
+                )} />
+              </Grid>
+              <Grid item xs={12}>
+                <Controller name="medical_conditions" control={control} defaultValue="" render={({ field }) => (
+                  <TextField {...field} label="Medical Conditions (leave blank if none)" fullWidth />
+                )} />
+              </Grid>
+              {/* Membership Options */}
+              <Grid item xs={12}>
+                <Controller name="membership_type" control={control} defaultValue="club" render={({ field }) => (
+                  <TextField {...field} label="Membership Option" select fullWidth required>
+                    {membershipOptions.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                    ))}
+                  </TextField>
+                )} />
+              </Grid>
+              {/* Policy Acknowledgement */}
+              <Grid item xs={12}>
+                <Controller name="agreed_policies" control={control} defaultValue={false} rules={{ required: true }} render={({ field }) => (
+                  <FormControlLabel
+                    control={<Checkbox {...field} checked={field.value} />}
+                    label={
+                      <>
+                        I agree to adhere to the SADRC values and the England Athletics Code of Conduct for Senior Athletes (
+                        <a href="#code-pdf" onClick={e => { e.preventDefault(); setShowCodePdf(v => !v); }} style={{ color: '#ff9800', cursor: 'pointer' }}>read code</a>
+                        ).
+                      </>
+                    }
+                    required
                   />
+                )} />
+              </Grid>
+              {showCodePdf && (
+                <Grid item xs={12} id="code-pdf">
+                  <Box sx={{ my: 2, border: '2px solid #ff9800', borderRadius: 2, overflow: 'hidden', bgcolor: 'background.paper' }}>
+                    <iframe
+                      src="/pdfs/codes-of-conduct-senior-athletes-1%20(1).pdf"
+                      title="Code of Conduct PDF"
+                      width="100%"
+                      height="600px"
+                      style={{ border: 'none' }}
+                    />
+                  </Box>
+                </Grid>
+              )}
+              {/* Opt-out options */}
+              <Grid item xs={12} sm={6}>
+                <Controller name="opt_in_competitions" control={control} defaultValue={false} render={({ field }) => (
+                  <FormControlLabel
+                    control={<Checkbox {...field} checked={field.value} />}
+                    label="Opt in to club competitions and league tables"
+                  />
+                )} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="opt_out_photos" control={control} defaultValue={false} render={({ field }) => (
+                  <FormControlLabel
+                    control={<Checkbox {...field} checked={field.value} />}
+                    label="Opt out of having photographs displayed on the Club's social media pages"
+                  />
+                )} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="opt_in_aaga_challenge" control={control} defaultValue={false} render={({ field }) => (
+                  <FormControlLabel
+                    control={<Checkbox {...field} checked={field.value} />}
+                    label="Opt in to the AaGA Challenge"
+                  />
+                )} />
+              </Grid>
+              {/* Payment Instructions */}
+              <Grid item xs={12}>
+                <Box my={2} p={2} borderRadius={2} sx={{ bgcolor: 'background.default', color: 'text.primary', border: 1, borderColor: 'primary.main' }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main', fontWeight: 700 }}>
+                    Payment Instructions (BACS):
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                    Sort Code: <b>30-97-67</b><br />
+                    Account Number: <b>23387568</b><br />
+                    Account Name: <b>Skegness & District Running Club</b>
+                  </Typography>
                 </Box>
               </Grid>
-            )}
-            {/* Opt-out options */}
-            <Grid item xs={12} sm={6}>
-              <Controller name="opt_in_competitions" control={control} defaultValue={false} render={({ field }) => (
-                <FormControlLabel
-                  control={<Checkbox {...field} checked={field.value} />}
-                  label="Opt in to club competitions and league tables"
+              {/* Digital Signature Capture */}
+              <Grid item xs={12}>
+                <SignaturePad
+                  value={signature}
+                  onChange={setSignature}
+                  label="Digital Signature (optional)"
                 />
-              )} />
+                {uploading && <Alert severity="info">Uploading signature...</Alert>}
+              </Grid>
+              <Grid item xs={12}>
+                <Button type="submit" variant="contained" color="primary" fullWidth size="large">
+                  Submit Application
+                </Button>
+              </Grid>
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <Controller name="opt_out_photos" control={control} defaultValue={false} render={({ field }) => (
-                <FormControlLabel
-                  control={<Checkbox {...field} checked={field.value} />}
-                  label="Opt out of having photographs displayed on the Club's social media pages"
-                />
-              )} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Controller name="opt_in_aaga_challenge" control={control} defaultValue={false} render={({ field }) => (
-                <FormControlLabel
-                  control={<Checkbox {...field} checked={field.value} />}
-                  label="Opt in to the AaGA Challenge"
-                />
-              )} />
-            </Grid>
-            {/* Payment Instructions */}
-            <Grid item xs={12}>
-              <Box my={2} p={2} borderRadius={2} sx={{ bgcolor: 'background.default', color: 'text.primary', border: 1, borderColor: 'primary.main' }}>
-                <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main', fontWeight: 700 }}>
-                  Payment Instructions (BACS):
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'text.primary' }}>
-                  Sort Code: <b>30-97-67</b><br />
-                  Account Number: <b>23387568</b><br />
-                  Account Name: <b>Skegness & District Running Club</b>
-                </Typography>
-              </Box>
-            </Grid>
-            {/* Digital Signature Capture */}
-            <Grid item xs={12}>
-              <SignaturePad
-                value={signature}
-                onChange={setSignature}
-                label="Digital Signature (optional)"
-              />
-              {uploading && <Alert severity="info">Uploading signature...</Alert>}
-            </Grid>
-            <Grid item xs={12}>
-              <Button type="submit" variant="contained" color="primary" fullWidth size="large">
-                Submit Application
-              </Button>
-            </Grid>
-          </Grid>
-        </form>
-      </Box>
-    </Container>
+          </form>
+        </Box>
+      </Container>
+    </>
   );
 }
