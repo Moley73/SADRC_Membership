@@ -429,82 +429,88 @@ export default function ManagePage() {
             sx={{ mb: 3 }}
           />
           
-          {loading && !users.length ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-              <CircularProgress />
-            </Box>
-          ) : error ? (
-            <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
-          ) : filteredUsers.length === 0 ? (
-            <Alert severity="info" sx={{ mb: 3 }}>
-              No users found. {searchTerm ? 'Try a different search term.' : 'Add administrators using the button above.'}
-            </Alert>
-          ) : (
-            <Table sx={{ minWidth: 650 }}>
-              <TableHead sx={{ 
-                bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
-                '& th': {
-                  color: theme => theme.palette.mode === 'dark' ? 'common.white' : 'text.primary',
-                  fontWeight: 'bold'
-                }
-              }}>
-                <TableRow>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Role</TableCell>
-                  <TableCell>Last Updated</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredUsers.map((user) => {
-                  const memberDetails = getMemberDetails(user.email);
-                  return (
-                    <TableRow key={user.id} hover>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        {memberDetails ? 
-                          `${memberDetails.first_name || ''} ${memberDetails.surname || ''}` : 
-                          'Not a member'}
-                      </TableCell>
-                      <TableCell>
-                        {getRoleChip(user.role)}
-                      </TableCell>
-                      <TableCell>
-                        {new Date(user.updated_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                          <Tooltip title="Edit Role">
-                            <span>
-                              <IconButton 
-                                color="primary" 
-                                onClick={() => handleEditRole(user)}
-                                disabled={user.role === 'super_admin' && user.email === 'briandarrington@btinternet.com'}
-                              >
-                                <EditIcon />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                          <Tooltip title="Remove Role">
-                            <span>
-                              <IconButton 
-                                color="error" 
-                                onClick={() => handleDeleteUser(user)}
-                                disabled={user.role === 'super_admin' && user.email === 'briandarrington@btinternet.com'}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
+          <Box sx={{ mt: 4 }}>
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : error ? (
+              <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
+            ) : filteredUsers.length === 0 ? (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                No users found. {searchTerm ? 'Try a different search term.' : 'Add administrators using the button above.'}
+              </Alert>
+            ) : (
+              <Paper elevation={3}>
+                <Box sx={{ overflowX: 'auto' }}>
+                  <Table sx={{ minWidth: 650 }}>
+                    <TableHead sx={{ 
+                      bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
+                      '& th': {
+                        color: theme => theme.palette.mode === 'dark' ? 'common.white' : 'text.primary',
+                        fontWeight: 'bold'
+                      }
+                    }}>
+                      <TableRow>
+                        <TableCell>Email</TableCell>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Role</TableCell>
+                        <TableCell>Last Updated</TableCell>
+                        <TableCell align="right">Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredUsers.map((user) => {
+                        const memberDetails = getMemberDetails(user.email);
+                        return (
+                          <TableRow key={user.id} hover>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>
+                              {memberDetails ? 
+                                `${memberDetails.first_name || ''} ${memberDetails.surname || ''}` : 
+                                'Not a member'}
+                            </TableCell>
+                            <TableCell>
+                              {getRoleChip(user.role)}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(user.updated_at).toLocaleString()}
+                            </TableCell>
+                            <TableCell align="right">
+                              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                                <Tooltip title="Edit Role">
+                                  <span>
+                                    <IconButton 
+                                      color="primary" 
+                                      onClick={() => handleEditRole(user)}
+                                      disabled={user.role === 'super_admin' && user.email === 'briandarrington@btinternet.com'}
+                                    >
+                                      <EditIcon />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                                <Tooltip title="Remove Role">
+                                  <span>
+                                    <IconButton 
+                                      color="error" 
+                                      onClick={() => handleDeleteUser(user)}
+                                      disabled={user.role === 'super_admin' && user.email === 'briandarrington@btinternet.com'}
+                                    >
+                                      <DeleteIcon />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </Paper>
+            )}
+          </Box>
         </Paper>
       </Container>
       
