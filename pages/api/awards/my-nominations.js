@@ -36,6 +36,33 @@ export default async function handler(req, res) {
     
     try {
       if (req.method === 'GET') {
+        // Check if award_settings table exists
+        try {
+          // Try to query the award_settings table
+          const { data: settingsData, error: settingsCheckError } = await supabaseAdmin
+            .from('award_settings')
+            .select('id')
+            .limit(1);
+            
+          // If we get a specific error about the table not existing, return a specific response
+          if (settingsCheckError && 
+              (settingsCheckError.code === '42P01' || 
+               settingsCheckError.message.includes('relation') || 
+               settingsCheckError.message.includes('does not exist'))) {
+            console.log('Award tables do not exist yet');
+            return res.status(503).json({ 
+              error: 'Award system database tables are not yet set up',
+              setupRequired: true
+            });
+          }
+        } catch (checkError) {
+          console.error('Error checking if award tables exist:', checkError);
+          return res.status(503).json({ 
+            error: 'Award system database tables are not yet set up',
+            setupRequired: true
+          });
+        }
+        
         // Get current award settings to get the active year
         const { data: settings, error: settingsError } = await supabaseAdmin
           .from('award_settings')

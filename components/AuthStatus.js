@@ -14,38 +14,29 @@ export default function AuthStatus() {
     const getUser = async () => {
       try {
         setLoading(true);
-        const { data, error } = await supabase.auth.getUser();
+        // Use getSession instead of getUser for more reliable authentication
+        const { data, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error('Error getting user:', error);
+          console.error('Error getting session:', error);
           setUser(null);
           setLoading(false);
           return;
         }
         
-        if (data?.user) {
-          console.log('User authenticated:', data.user.email);
-          setUser(data.user);
-          
-          // Check membership status
-          try {
-            const { data: memberData, error: memberError } = await supabase
-              .from('members')
-              .select('*')
-              .eq('email', data.user.email)
-              .maybeSingle();
-              
-            if (memberError) {
-              console.error('Error checking membership:', memberError);
-            } else {
-              console.log('Membership status checked:', memberData ? 'Member found' : 'No membership');
-            }
-          } catch (membershipError) {
-            console.error('Error in membership check:', membershipError);
-          }
-        } else {
+        if (!data?.session?.user) {
+          console.log('No active session found');
           setUser(null);
+          setLoading(false);
+          return;
         }
+        
+        const user = data.session.user;
+        console.log('User authenticated:', user.email);
+        setUser(user);
+        
+        // No need to check membership status in this component
+        // This was causing errors with the non-existent profiles table
       } catch (err) {
         console.error('Unexpected error getting user:', err);
         setUser(null);
