@@ -1,10 +1,19 @@
-import { createServerSupabaseClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../../../lib/supabaseClient';
 
 export default async function handler(req, res) {
   try {
     // Create a Supabase client for server-side authentication with explicit env variables
-    const supabase = createServerSupabaseClient({ req, res });
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
+      }
+    );
     
     // Log the Supabase URL being used to verify environment variables are loaded
     console.log('Using Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
