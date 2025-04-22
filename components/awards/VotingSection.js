@@ -23,6 +23,17 @@ export default function VotingSection({ categories }) {
       try {
         setLoading(true);
         
+        // Get the current session to include the token in requests
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        
+        if (!token) {
+          console.error('No access token available');
+          setError('Authentication error - please try logging out and back in');
+          setLoading(false);
+          return;
+        }
+        
         // Fetch club members
         const { data: membersData, error: membersError } = await supabase
           .from('members')
@@ -36,7 +47,13 @@ export default function VotingSection({ categories }) {
         const nominationsMap = {};
         
         for (const category of categories) {
-          const res = await fetch(`/api/awards/nominations?categoryId=${category.id}&status=approved`);
+          const res = await fetch(`/api/awards/nominations?categoryId=${category.id}&status=approved`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+          });
           if (!res.ok) throw new Error(`Failed to fetch nominations for ${category.name}`);
           
           const categoryNominations = await res.json();
@@ -50,7 +67,13 @@ export default function VotingSection({ categories }) {
         
         if (user) {
           // This would be a custom endpoint to get the user's votes
-          const votesRes = await fetch('/api/awards/votes/my-votes');
+          const votesRes = await fetch('/api/awards/votes/my-votes', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+          });
           if (votesRes.ok) {
             const votesData = await votesRes.json();
             setMyVotes(votesData);
@@ -77,12 +100,22 @@ export default function VotingSection({ categories }) {
       setError(null);
       setSuccess(null);
       
+      // Get the current session to include the token in the request
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      
+      if (!token) {
+        throw new Error('Authentication error - please try logging out and back in');
+      }
+      
       // Submit vote
       const res = await fetch('/api/awards/votes', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
+        credentials: 'include',
         body: JSON.stringify({ nominationId })
       });
       

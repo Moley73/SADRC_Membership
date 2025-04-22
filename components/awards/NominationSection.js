@@ -42,8 +42,24 @@ export default function NominationSection({ categories }) {
     const fetchMyNominations = async () => {
       try {
         setLoadingNominations(true);
+        
+        // Get the current session to include the token in the request
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        
+        if (!token) {
+          console.error('No access token available');
+          setError('Authentication error - please try logging out and back in');
+          setLoadingNominations(false);
+          return;
+        }
+        
         const res = await fetch('/api/awards/my-nominations', {
-          credentials: 'include'
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
         
         if (!res.ok) {
@@ -130,13 +146,22 @@ export default function NominationSection({ categories }) {
         throw new Error('Please provide a more detailed reason for your nomination (at least 10 characters)');
       }
       
+      // Get the current session to include the token in the request
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      
+      if (!token) {
+        throw new Error('Authentication error - please try logging out and back in');
+      }
+      
       // Submit nomination
       const res = await fetch('/api/awards/nominations', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
-        credentials: 'include', // Include cookies in the request
+        credentials: 'include',
         body: JSON.stringify(formState)
       });
       
