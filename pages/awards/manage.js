@@ -504,12 +504,40 @@ function NominationsManager() {
     status: 'approved',
     reason: ''
   });
+  const [token, setToken] = useState(null);
+
+  // Get authentication token
+  useEffect(() => {
+    const getToken = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.access_token) {
+        setToken(data.session.access_token);
+        console.log('Token retrieved for nominations review');
+      } else {
+        console.log('No token available for nominations review');
+      }
+    };
+    getToken();
+  }, []);
 
   const fetchNominations = useCallback(() => {
     setLoading(true);
     setError(null);
     
-    fetch(`/api/awards/nominations-review?status=${filter}`)
+    // Only fetch if we have a token
+    if (!token) {
+      console.log('Waiting for authentication token...');
+      setTimeout(fetchNominations, 1000); // Retry after 1 second
+      return;
+    }
+    
+    fetch(`/api/awards/nominations-review?status=${filter}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    })
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch nominations');
         return res.json();
@@ -523,11 +551,13 @@ function NominationsManager() {
         setError(err.message || 'Failed to load nominations');
         setLoading(false);
       });
-  }, [filter]);
+  }, [filter, token]);
 
   useEffect(() => {
-    fetchNominations();
-  }, [fetchNominations]);
+    if (token) {
+      fetchNominations();
+    }
+  }, [fetchNominations, token]);
 
   const handleFilterChange = (event) => {
     setFilter(event.target.value);
@@ -560,10 +590,19 @@ function NominationsManager() {
     setError(null);
     setSuccess(null);
     
+    if (!token) {
+      setError('Authentication token not available. Please try again.');
+      return;
+    }
+    
     try {
       const res = await fetch('/api/awards/nominations-review', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        credentials: 'include',
         body: JSON.stringify({
           nominationId: reviewDialog.nomination.id,
           status: reviewData.status,
