@@ -596,6 +596,8 @@ function NominationsManager() {
     }
     
     try {
+      console.log('Submitting review for nomination:', reviewDialog.nomination.id);
+      
       const res = await fetch('/api/awards/nominations-review', {
         method: 'POST',
         headers: { 
@@ -610,9 +612,10 @@ function NominationsManager() {
         })
       });
       
+      const data = await res.json();
+      
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to update nomination');
+        throw new Error(data.error || 'Failed to update nomination');
       }
       
       setSuccess(`Nomination ${reviewData.status === 'approved' ? 'approved' : 'rejected'} successfully`);

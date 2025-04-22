@@ -57,88 +57,92 @@ export default async function handler(req, res) {
       .eq('email', user.email)
       .maybeSingle();
       
-    if (adminError || !adminData || !['admin', 'super_admin'].includes(adminData?.role)) {
+    if (adminError) {
+      console.error('Error checking admin status:', adminError);
+      return res.status(500).json({ error: 'Failed to verify admin status' });
+    }
+    
+    if (!adminData || !['admin', 'super_admin'].includes(adminData?.role)) {
       return res.status(403).json({ error: 'Forbidden - Admin access required' });
     }
 
-    try {
-      if (req.method === 'GET') {
-        // Get current award settings
-        const { data: settings, error: settingsError } = await supabaseAdmin
-          .from('award_settings')
-          .select('active_year, current_phase')
-          .single();
-          
-        if (settingsError) {
-          console.error('Error fetching award settings:', settingsError);
-          return res.status(500).json({ error: 'Failed to fetch award settings' });
-        }
+    // Handle GET request for fetching nominations
+    if (req.method === 'GET') {
+      // Get current award settings
+      const { data: settings, error: settingsError } = await supabaseAdmin
+        .from('award_settings')
+        .select('active_year, current_phase')
+        .single();
         
-        // Get nominations by status
-        const { status = 'pending' } = req.query;
-        
-        const { data: nominations, error: nominationsError } = await supabaseAdmin
-          .from('award_nominations')
-          .select(`
-            *,
-            category:award_categories(id, name, description)
-          `)
-          .eq('award_year', settings.active_year)
-          .eq('status', status)
-          .order('created_at', { ascending: false });
-          
-        if (nominationsError) {
-          console.error('Error fetching nominations for review:', nominationsError);
-          return res.status(500).json({ error: 'Failed to fetch nominations' });
-        }
-        
-        return res.status(200).json(nominations);
-      } 
-      else if (req.method === 'POST') {
-        // Update nomination status
-        const { nominationId, status, reason } = req.body;
-        
-        if (!nominationId || !status) {
-          return res.status(400).json({ error: 'Nomination ID and status are required' });
-        }
-        
-        if (!['approved', 'rejected'].includes(status)) {
-          return res.status(400).json({ error: 'Status must be either "approved" or "rejected"' });
-        }
-        
-        // If rejecting, require a reason
-        if (status === 'rejected' && (!reason || reason.trim().length < 5)) {
-          return res.status(400).json({ error: 'A reason is required when rejecting a nomination' });
-        }
-        
-        // Update the nomination
-        const updateData = {
-          status,
-          admin_note: reason || null,
-          updated_at: new Date().toISOString(),
-          reviewed_by: user.email
-        };
-        
-        const { data: updatedNomination, error: updateError } = await supabaseAdmin
-          .from('award_nominations')
-          .update(updateData)
-          .eq('id', nominationId)
-          .select()
-          .single();
-          
-        if (updateError) {
-          console.error('Error updating nomination status:', updateError);
-          return res.status(500).json({ error: 'Failed to update nomination status' });
-        }
-        
-        return res.status(200).json(updatedNomination);
-      } 
-      else {
-        return res.status(405).json({ error: 'Method not allowed' });
+      if (settingsError) {
+        console.error('Error fetching award settings:', settingsError);
+        return res.status(500).json({ error: 'Failed to fetch award settings' });
       }
-    } catch (error) {
-      console.error('Error in nominations review API:', error);
-      return res.status(500).json({ error: error.message || 'Internal server error' });
+      
+      // Get nominations by status
+      const { status = 'pending' } = req.query;
+      
+      const { data: nominations, error: nominationsError } = await supabaseAdmin
+        .from('award_nominations')
+        .select(`
+          *,
+          category:award_categories(id, name, description)
+        `)
+        .eq('award_year', settings.active_year)
+        .eq('status', status)
+        .order('created_at', { ascending: false });
+        
+      if (nominationsError) {
+        console.error('Error fetching nominations for review:', nominationsError);
+        return res.status(500).json({ error: 'Failed to fetch nominations' });
+      }
+      
+      return res.status(200).json(nominations);
+    } 
+    // Handle POST request for updating nomination status
+    else if (req.method === 'POST') {
+      // Update nomination status
+      const { nominationId, status, reason } = req.body;
+      
+      if (!nominationId || !status) {
+        return res.status(400).json({ error: 'Nomination ID and status are required' });
+      }
+      
+      if (!['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ error: 'Status must be either "approved" or "rejected"' });
+      }
+      
+      // If rejecting, require a reason
+      if (status === 'rejected' && (!reason || reason.trim().length < 5)) {
+        return res.status(400).json({ error: 'A reason is required when rejecting a nomination' });
+      }
+      
+      // Update the nomination
+      const updateData = {
+        status,
+        admin_note: reason || null,
+        updated_at: new Date().toISOString(),
+        reviewed_by: user.email
+      };
+      
+      console.log('Updating nomination:', nominationId, 'with data:', updateData);
+      
+      const { data: updatedNomination, error: updateError } = await supabaseAdmin
+        .from('award_nominations')
+        .update(updateData)
+        .eq('id', nominationId)
+        .select()
+        .single();
+        
+      if (updateError) {
+        console.error('Error updating nomination status:', updateError);
+        return res.status(500).json({ error: 'Failed to update nomination status: ' + updateError.message });
+      }
+      
+      return res.status(200).json(updatedNomination);
+    } 
+    else {
+      return res.status(405).json({ error: 'Method not allowed' });
     }
   } catch (error) {
     console.error('Error in nominations review API:', error);
