@@ -9,8 +9,9 @@ export default async function handler(req, res) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         auth: {
-          persistSession: false,
-          autoRefreshToken: false
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true
         }
       }
     );
@@ -18,20 +19,57 @@ export default async function handler(req, res) {
     // Log the Supabase URL being used to verify environment variables are loaded
     console.log('Using Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
     
+    // Get the auth cookie from the request
+    const authCookie = req.cookies['sb-access-token'] || req.cookies['sb:token'] || req.cookies['supabase-auth-token'];
+    
+    if (!authCookie) {
+      console.error('No auth cookie found in request');
+    } else {
+      console.log('Auth cookie found:', authCookie.substring(0, 10) + '...');
+    }
+    
     // Check if user is authenticated
     const {
       data: { session },
       error: sessionError
     } = await supabase.auth.getSession();
     
-    console.log('Session:', session, 'Error:', sessionError);
+    console.log('Session check result:', session ? 'Session found' : 'No session found', 'Error:', sessionError);
     
-    if (!session || !session.user) {
-      console.error('No session or user found');
-      return res.status(401).json({ error: 'Unauthorized - No session found' });
+    // If no session from cookie, try to get it from the Authorization header
+    let user = session?.user;
+    if (!user) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        try {
+          const { data, error } = await supabase.auth.getUser(token);
+          if (!error && data?.user) {
+            user = data.user;
+            console.log('User found from Authorization header:', user.email);
+          }
+        } catch (tokenError) {
+          console.error('Error verifying token:', tokenError);
+        }
+      }
     }
     
-    const user = session.user;
+    // If still no user, try using admin client as fallback for development
+    if (!user) {
+      // For development/testing: allow admin access with specific headers
+      const isDevMode = process.env.NODE_ENV === 'development';
+      const devBypass = req.headers['x-dev-bypass'] === process.env.DEV_BYPASS_SECRET;
+      const adminEmail = req.headers['x-admin-email'];
+      
+      if (isDevMode && devBypass && adminEmail) {
+        console.log('Using development bypass with admin email:', adminEmail);
+        user = { email: adminEmail };
+      } else {
+        console.error('No session or user found');
+        return res.status(401).json({ error: 'Unauthorized - No session found' });
+      }
+    }
+    
     console.log('Authenticated user:', user.email);
     
     try {
