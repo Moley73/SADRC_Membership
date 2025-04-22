@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   Container, Typography, Box, Paper, Tabs, Tab, Button, Alert, CircularProgress, Divider,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Chip
