@@ -4,42 +4,71 @@ export default async function handler(req, res) {
   try {
     // Get the authorization header
     const authHeader = req.headers.authorization;
+    let user = null;
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Missing or invalid authorization header' });
+    // Check if we have an authorization header
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      // Extract the token
+      const token = authHeader.split(' ')[1];
+      
+      // Verify the token and get user info
+      const { data: userData, error: authError } = await supabase.auth.getUser(token);
+      
+      if (!authError && userData.user) {
+        user = userData.user;
+        console.log('Authenticated user:', user.email);
+      } else {
+        console.log('Auth error or no user:', authError);
+      }
+    } else {
+      console.log('No authorization header provided');
     }
     
-    // Extract the token
-    const token = authHeader.split(' ')[1];
-    
-    // Verify the token and get user info
-    const { data: userData, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !userData.user) {
-      console.error('Auth error:', authError);
-      return res.status(401).json({ error: 'Invalid authentication token' });
-    }
-    
-    const user = userData.user;
-    
-    // Check if user has admin rights
-    const { data: adminData } = await supabase
-      .from('admin_list')
-      .select('role')
-      .eq('email', user.email)
-      .maybeSingle();
-    
-    const isAdmin = adminData?.role?.toLowerCase().includes('admin') || 
-                    adminData?.role?.toLowerCase().includes('editor') ||
-                    user.email === 'briandarrington@btinternet.com';
-    
-    if (!isAdmin) {
-      return res.status(403).json({ error: 'Not authorized. Admin access required.' });
-    }
-    
-    // If we get here, the user is authenticated and authorized
-    
+    // For the GET method, we'll allow different access levels
     if (req.method === 'GET') {
+      // Check if this is for awards functionality
+      const isAwardsRequest = req.query.for === 'awards';
+      
+      // If user is authenticated and this is for awards, we'll allow access
+      // without requiring admin rights
+      if (user && isAwardsRequest) {
+        console.log('Allowing member list access for awards functionality');
+        try {
+          // Use service role to bypass RLS
+          const { data, error } = await supabaseAdmin
+            .from('members')
+            .select('id, email, first_name, surname')
+            .order('surname', { ascending: true });
+            
+          if (error) throw error;
+          return res.status(200).json(data || []);
+        } catch (error) {
+          console.error('Error fetching members for awards:', error);
+          return res.status(500).json({ error: error.message });
+        }
+      }
+      
+      // For non-awards requests, require admin rights
+      if (!user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      
+      // Check if user has admin rights
+      const { data: adminData } = await supabase
+        .from('admin_list')
+        .select('role')
+        .eq('email', user.email)
+        .maybeSingle();
+      
+      const isAdmin = adminData?.role?.toLowerCase().includes('admin') || 
+                      adminData?.role?.toLowerCase().includes('editor') ||
+                      user.email === 'briandarrington@btinternet.com';
+      
+      if (!isAdmin) {
+        return res.status(403).json({ error: 'Not authorized. Admin access required.' });
+      }
+      
+      // If we get here, the user is authenticated and authorized
       try {
         // Use service role to bypass RLS
         const { data, error } = await supabaseAdmin

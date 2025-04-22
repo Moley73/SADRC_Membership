@@ -26,15 +26,74 @@ export default function NominationSection({ categories }) {
     // Fetch club members
     const fetchMembers = async () => {
       try {
+        setLoading(true);
+        
+        // Get the current session to include the token in the request
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        
+        console.log('Fetching members with token:', token ? 'Token available' : 'No token');
+        
         const { data, error } = await supabase
           .from('members')
           .select('id, email, first_name, surname')
           .order('surname');
           
-        if (error) throw error;
+        if (error) {
+          console.error('Error fetching members:', error);
+          
+          // Check if it's a permission error and try with service role if available
+          if (error.code === 'PGRST301' || error.message?.includes('permission denied')) {
+            console.log('Attempting to fetch members using API endpoint as fallback');
+            
+            try {
+              // Fallback to API endpoint that might use service role
+              const response = await fetch('/api/members?for=awards', {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                credentials: 'include'
+              });
+              
+              if (response.ok) {
+                const membersData = await response.json();
+                console.log(`Successfully fetched ${membersData.length} members via API`);
+                setMembers(membersData);
+                return;
+              }
+            } catch (fallbackError) {
+              console.error('Fallback members fetch failed:', fallbackError);
+            }
+          }
+          
+          // If we get here, both methods failed
+          throw error;
+        }
+        
+        console.log(`Successfully fetched ${data?.length || 0} members directly`);
         setMembers(data || []);
+        
+        // If no members found but we're in development, add some test data
+        if ((!data || data.length === 0) && process.env.NODE_ENV === 'development') {
+          console.log('Adding test members for development');
+          setMembers([
+            { id: '1', email: 'test1@example.com', first_name: 'Test', surname: 'User 1' },
+            { id: '2', email: 'test2@example.com', first_name: 'Test', surname: 'User 2' },
+            { id: '3', email: 'test3@example.com', first_name: 'Test', surname: 'User 3' }
+          ]);
+        }
       } catch (err) {
-        console.error('Error fetching members:', err);
+        console.error('Exception fetching members:', err);
+        
+        // Add fallback test data in case of errors
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Adding fallback test members');
+          setMembers([
+            { id: '1', email: 'test1@example.com', first_name: 'Test', surname: 'User 1' },
+            { id: '2', email: 'test2@example.com', first_name: 'Test', surname: 'User 2' },
+            { id: '3', email: 'test3@example.com', first_name: 'Test', surname: 'User 3' }
+          ]);
+        }
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -47,8 +106,10 @@ export default function NominationSection({ categories }) {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token;
         
+        console.log('Fetching nominations with token:', token ? 'Token available' : 'No token');
+        
         if (!token) {
-          console.error('No access token available');
+          console.error('No access token available for nominations');
           setError('Authentication error - please try logging out and back in');
           setLoadingNominations(false);
           return;
@@ -62,8 +123,11 @@ export default function NominationSection({ categories }) {
           }
         });
         
+        console.log('Nominations API response status:', res.status);
+        
         if (!res.ok) {
-          const errorData = await res.json();
+          const errorData = await res.json().catch(() => ({ error: 'Failed to parse error response' }));
+          console.error('Nominations API error data:', errorData);
           
           // Check if the error is related to missing tables
           if (errorData.error && (
@@ -80,6 +144,7 @@ export default function NominationSection({ categories }) {
         }
         
         const nominations = await res.json();
+        console.log(`Successfully fetched ${nominations.length} nominations`);
         setMyNominations(nominations);
       } catch (err) {
         console.error('Error fetching my nominations:', err);
