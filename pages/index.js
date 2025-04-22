@@ -176,7 +176,7 @@ export default function Home() {
               <Typography variant="body1" sx={{ mb: 2 }}>
                 Please log in to access membership features.
               </Typography>
-              <Link href="/api/auth/login" passHref legacyBehavior>
+              <Link href="/login" passHref legacyBehavior>
                 <Button variant="contained" color="primary" size="large">
                   Log In
                 </Button>
