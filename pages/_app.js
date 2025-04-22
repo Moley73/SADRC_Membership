@@ -135,6 +135,8 @@ export default function App({ Component, pageProps }) {
                   <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/')}>HOME</Button>
                   <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/resources')}>RESOURCES</Button>
                   <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/awards')}>AWARDS</Button>
+                  <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/relay')}>RELAY</Button>
+                  <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/xmas-party')}>XMAS PARTY</Button>
                   {isAdmin && (
                     <Button color="inherit" sx={{ fontWeight: 700 }} onClick={() => router.push('/admin')}>ADMIN</Button>
                   )}
@@ -172,6 +174,8 @@ export default function App({ Component, pageProps }) {
             <MenuItem onClick={() => handleNavigation('/')}>HOME</MenuItem>
             <MenuItem onClick={() => handleNavigation('/resources')}>RESOURCES</MenuItem>
             <MenuItem onClick={() => handleNavigation('/awards')}>AWARDS</MenuItem>
+            <MenuItem onClick={() => handleNavigation('/relay')}>RELAY</MenuItem>
+            <MenuItem onClick={() => handleNavigation('/xmas-party')}>XMAS PARTY</MenuItem>
             {isAdmin && (
               <MenuItem onClick={() => handleNavigation('/admin')}>ADMIN</MenuItem>
             )}
