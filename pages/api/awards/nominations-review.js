@@ -117,29 +117,75 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'A reason is required when rejecting a nomination' });
       }
       
+      // First, check if the nomination exists
+      const { data: nomination, error: nominationError } = await supabaseAdmin
+        .from('award_nominations')
+        .select('id, status')
+        .eq('id', nominationId)
+        .single();
+        
+      if (nominationError) {
+        console.error('Error finding nomination:', nominationError);
+        return res.status(404).json({ error: 'Nomination not found or table does not exist' });
+      }
+      
+      if (!nomination) {
+        return res.status(404).json({ error: 'Nomination not found' });
+      }
+      
       // Update the nomination
       const updateData = {
         status,
-        admin_note: reason || null,
         updated_at: new Date().toISOString(),
         reviewed_by: user.email
       };
       
-      console.log('Updating nomination:', nominationId, 'with data:', updateData);
-      
-      const { data: updatedNomination, error: updateError } = await supabaseAdmin
-        .from('award_nominations')
-        .update(updateData)
-        .eq('id', nominationId)
-        .select()
-        .single();
-        
-      if (updateError) {
-        console.error('Error updating nomination status:', updateError);
-        return res.status(500).json({ error: 'Failed to update nomination status: ' + updateError.message });
+      // Only include admin_note if a reason is provided (for rejections)
+      if (reason) {
+        updateData.admin_note = reason;
       }
       
-      return res.status(200).json(updatedNomination);
+      console.log('Updating nomination:', nominationId, 'with data:', updateData);
+      
+      try {
+        const { data: updatedNomination, error: updateError } = await supabaseAdmin
+          .from('award_nominations')
+          .update(updateData)
+          .eq('id', nominationId)
+          .select()
+          .single();
+          
+        if (updateError) {
+          console.error('Error updating nomination status:', updateError);
+          
+          // If the error is related to admin_note column, try without it
+          if (updateError.message && updateError.message.includes('admin_note')) {
+            console.log('Retrying update without admin_note field');
+            delete updateData.admin_note;
+            
+            const { data: retryNomination, error: retryError } = await supabaseAdmin
+              .from('award_nominations')
+              .update(updateData)
+              .eq('id', nominationId)
+              .select()
+              .single();
+              
+            if (retryError) {
+              console.error('Error in retry update:', retryError);
+              return res.status(500).json({ error: 'Failed to update nomination status: ' + retryError.message });
+            }
+            
+            return res.status(200).json(retryNomination);
+          }
+          
+          return res.status(500).json({ error: 'Failed to update nomination status: ' + updateError.message });
+        }
+        
+        return res.status(200).json(updatedNomination);
+      } catch (error) {
+        console.error('Unexpected error updating nomination:', error);
+        return res.status(500).json({ error: 'Unexpected error: ' + error.message });
+      }
     } 
     else {
       return res.status(405).json({ error: 'Method not allowed' });
