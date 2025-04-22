@@ -24,30 +24,67 @@ function AwardsPage() {
         setLoading(true);
         setError(null);
 
+        // Add timeout to prevent infinite loading
+        const timeoutPromise = (ms) => new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timed out')), ms)
+        );
+
         // Fetch award settings using the public endpoint
-        const settingsRes = await fetch('/api/awards/public-settings', {
-          credentials: 'include'
-        });
-        if (!settingsRes.ok) {
-          throw new Error('Failed to fetch award settings');
+        try {
+          const settingsPromise = fetch('/api/awards/public-settings', {
+            credentials: 'include'
+          });
+          
+          const settingsRes = await Promise.race([
+            settingsPromise,
+            timeoutPromise(5000) // 5 second timeout
+          ]);
+          
+          if (!settingsRes.ok) {
+            throw new Error(`Failed to fetch award settings: ${settingsRes.status}`);
+          }
+          
+          const settingsData = await settingsRes.json();
+          setSettings(settingsData);
+        } catch (settingsErr) {
+          console.error('Error fetching settings:', settingsErr);
+          // Set default settings to prevent UI from being stuck
+          setSettings({
+            current_phase: 'inactive',
+            active_year: new Date().getFullYear()
+          });
+          throw settingsErr;
         }
-        const settingsData = await settingsRes.json();
-        setSettings(settingsData);
 
         // Fetch award categories
-        const categoriesRes = await fetch('/api/awards/categories', {
-          credentials: 'include'
-        });
-        if (!categoriesRes.ok) {
-          throw new Error('Failed to fetch award categories');
+        try {
+          const categoriesPromise = fetch('/api/awards/categories', {
+            credentials: 'include'
+          });
+          
+          const categoriesRes = await Promise.race([
+            categoriesPromise,
+            timeoutPromise(5000) // 5 second timeout
+          ]);
+          
+          if (!categoriesRes.ok) {
+            throw new Error(`Failed to fetch award categories: ${categoriesRes.status}`);
+          }
+          
+          const categoriesData = await categoriesRes.json();
+          setCategories(categoriesData);
+        } catch (categoriesErr) {
+          console.error('Error fetching categories:', categoriesErr);
+          // Set empty categories to prevent UI from being stuck
+          setCategories([]);
+          throw categoriesErr;
         }
-        const categoriesData = await categoriesRes.json();
-        setCategories(categoriesData);
 
       } catch (err) {
         console.error('Error fetching awards data:', err);
-        setError(err.message);
+        setError(`Failed to load awards data: ${err.message}`);
       } finally {
+        // Always set loading to false, even if there are errors
         setLoading(false);
       }
     };

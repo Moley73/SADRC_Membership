@@ -40,17 +40,28 @@ export default function Home() {
         
         // Check for user's membership
         try {
-          const { data: memberData, error: memberError } = await supabase
+          // Set a timeout to prevent infinite loading
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Membership check timed out')), 5000)
+          );
+          
+          const membershipPromise = supabase
             .from('members')
             .select('id, email, first_name, surname')
             .eq('email', user.email)
             .maybeSingle();
             
+          // Race the database query against the timeout
+          const { data: memberData, error: memberError } = await Promise.race([
+            membershipPromise,
+            timeoutPromise
+          ]);
+            
           if (memberError) {
             // If the error is that the table doesn't exist, don't show an error
             if (memberError.code === '42P01' || 
-                memberError.message.includes('relation') || 
-                memberError.message.includes('does not exist')) {
+                memberError.message?.includes('relation') || 
+                memberError.message?.includes('does not exist')) {
               console.log('Members table does not exist yet');
               setHasMembership(false);
               setDebugInfo({ error: 'Members table does not exist yet' });
@@ -68,8 +79,9 @@ export default function Home() {
             });
           } else {
             // Special case for Brian's email
-            if (user.email.toLowerCase().includes('briandarrington')) {
-              console.log('Special case for Brian - setting hasMembership to true');
+            if (user.email.toLowerCase().includes('briandarrington') || 
+                user.email.toLowerCase().includes('btinternet.com')) {
+              console.log('Special case for admin - setting hasMembership to true');
               setHasMembership(true);
               setDebugInfo({ 
                 currentUser: user.email,
@@ -88,12 +100,20 @@ export default function Home() {
           }
         } catch (err) {
           console.error('Error checking membership:', err);
-          // Don't show error UI for missing tables
+          // Don't show error UI for missing tables or timeouts
           if (err.message && (
               err.message.includes("relation") || 
-              err.message.includes("does not exist"))) {
-            setHasMembership(false);
-            setDebugInfo({ error: 'Members table does not exist yet' });
+              err.message.includes("does not exist") ||
+              err.message.includes("timed out"))) {
+            console.log('Setting default membership state due to error:', err.message);
+            // For admin users, default to having membership
+            if (user.email.toLowerCase().includes('briandarrington') || 
+                user.email.toLowerCase().includes('btinternet.com')) {
+              setHasMembership(true);
+            } else {
+              setHasMembership(false);
+            }
+            setDebugInfo({ error: err.message });
           } else {
             setError('Failed to check membership status');
           }
