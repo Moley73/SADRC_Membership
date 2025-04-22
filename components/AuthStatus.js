@@ -66,15 +66,21 @@ export default function AuthStatus() {
   const handleLogout = async () => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signOut();
+      // Use a more robust approach to sign out
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      
       if (error) {
         console.error('Error signing out:', error);
+        alert('Failed to log out. Please try again.');
       } else {
+        console.log('Successfully signed out');
         setUser(null);
-        router.push('/login');
+        // Force a page reload to clear any cached state
+        window.location.href = '/login';
       }
     } catch (err) {
       console.error('Unexpected error during logout:', err);
+      alert('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
