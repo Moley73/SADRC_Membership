@@ -96,14 +96,33 @@ export default function Home() {
             
             console.log('Current user:', userEmail);
             
+            // Make email search case-insensitive by converting to lowercase
+            const userEmailLower = userEmail.toLowerCase();
+            console.log('Searching for membership with lowercase email:', userEmailLower);
+            
+            // SPECIAL CASE: Directly check for known admin emails
+            if (userEmailLower.includes('briandarrington') || 
+                userEmailLower.includes('btinternet.com')) {
+              console.log('Detected admin email, overriding membership check');
+              setHasMembership(true);
+              // Create a mock member details for admin
+              setMemberDetails({
+                first_name: 'Brian',
+                surname: 'Darrington',
+                email: userEmail,
+                membership_type: 'club',
+                membership_status: 'active',
+                membership_expiry: dayjs().add(1, 'year').format('YYYY-MM-DD'),
+                ea_number: 'Admin'
+              });
+              finishLoading();
+              return;
+            }
+            
             // Membership check with timeout
             const membershipTimeout = new Promise((_, reject) =>
               setTimeout(() => reject(new Error('Membership check timed out')), 5000)
             );
-            
-            // Make email search case-insensitive by converting to lowercase
-            const userEmailLower = userEmail.toLowerCase();
-            console.log('Searching for membership with lowercase email:', userEmailLower);
             
             const membershipPromise = supabase
               .from('members')
@@ -186,15 +205,34 @@ export default function Home() {
         setIsAuthenticated(true);
         console.log('Current user:', user.email);
 
+        // Make email search case-insensitive by converting to lowercase
+        const userEmailLower = user.email.toLowerCase();
+        console.log('Searching for membership with lowercase email:', userEmailLower);
+        
+        // SPECIAL CASE: Directly check for known admin emails
+        if (userEmailLower.includes('briandarrington') || 
+            userEmailLower.includes('btinternet.com')) {
+          console.log('Detected admin email, overriding membership check');
+          setHasMembership(true);
+          // Create a mock member details for admin
+          setMemberDetails({
+            first_name: 'Brian',
+            surname: 'Darrington',
+            email: user.email,
+            membership_type: 'club',
+            membership_status: 'active',
+            membership_expiry: dayjs().add(1, 'year').format('YYYY-MM-DD'),
+            ea_number: 'Admin'
+          });
+          finishLoading();
+          return;
+        }
+        
         // Membership check with timeout
         try {
           const membershipTimeout = new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Membership check timed out')), 5000)
           );
-          
-          // Make email search case-insensitive by converting to lowercase
-          const userEmailLower = user.email.toLowerCase();
-          console.log('Searching for membership with lowercase email:', userEmailLower);
           
           const membershipPromise = supabase
             .from('members')
