@@ -1,35 +1,38 @@
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../../lib/supabaseClient';
+import { corsHeaders, handleCors } from '../../lib/cors';
 
 export default async function handler(req, res) {
+  // Handle CORS
+  if (handleCors(req, res)) {
+    return; // Response already sent for OPTIONS request
+  }
+
   try {
     // Get the authorization header
     const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Bearer token required' });
+    }
     let user = null;
     let supabase = null;
     let token = null;
 
     // Always create a new supabase client for this request, using the access token
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
-      supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-        { global: { headers: { Authorization: `Bearer ${token}` } } }
-      );
-      // Verify the token and get user info
-      const { data: userData, error: authError } = await supabase.auth.getUser();
-      if (!authError && userData.user) {
-        user = userData.user;
-        console.log('Authenticated user:', user.email);
-      } else {
-        console.log('Auth error or no user:', authError);
-        // Fall back to admin client if token auth fails
-        supabase = supabaseAdmin;
-      }
+    token = authHeader.split(' ')[1];
+    supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+    // Verify the token and get user info
+    const { data: userData, error: authError } = await supabase.auth.getUser();
+    if (!authError && userData.user) {
+      user = userData.user;
+      console.log('Authenticated user:', user.email);
     } else {
-      console.log('No authorization header provided, using admin client');
-      // Fall back to admin client if no token
+      console.log('Auth error or no user:', authError);
+      // Fall back to admin client if token auth fails
       supabase = supabaseAdmin;
     }
 

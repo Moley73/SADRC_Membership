@@ -2,8 +2,14 @@
 // Only accessible to logged-in users and outputs detailed information about authentication and database access
 
 import { supabase, debugAuthState, testTableAccess } from '../../lib/supabaseClient';
+import { corsHeaders, handleCors } from '../../lib/cors';
 
 export default async function handler(req, res) {
+  // Handle CORS
+  if (handleCors(req, res)) {
+    return; // Response already sent for OPTIONS request
+  }
+  
   try {
     // First, check if the user is authenticated
     const { data: userData, error: authError } = await supabase.auth.getUser();
