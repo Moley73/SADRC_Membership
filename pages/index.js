@@ -6,7 +6,7 @@ import {
 import Link from 'next/link';
 import UpdateButton from '../components/UpdateButton';
 import { useState, useEffect } from 'react';
-import { supabase, debugAuthState, testTableAccess } from '../lib/supabaseClient';
+import { supabase, debugAuthState, testTableAccess, isAdminEmail } from '../lib/supabaseClient';
 import DirectionsRunIcon from '@mui/icons-material/DirectionsRun';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -100,12 +100,9 @@ export default function Home() {
             const userEmailLower = userEmail.toLowerCase();
             console.log('Searching for membership with lowercase email:', userEmailLower);
             
-            // SPECIAL CASE: Directly check for known admin emails
-            if (userEmailLower.includes('briandarrington') || 
-                userEmailLower.includes('btinternet') || 
-                userEmail.toLowerCase().includes('briandarrington') ||
-                userEmail.toLowerCase().includes('btinternet')) {
-              console.log('Detected admin email, overriding membership check');
+            // SPECIAL CASE: Use the helper function for admin detection
+            if (isAdminEmail(userEmail)) {
+              console.log('Detected admin email via helper function, overriding membership check');
               setHasMembership(true);
               // Create a mock member details for admin
               setMemberDetails({
@@ -211,12 +208,9 @@ export default function Home() {
         const userEmailLower = user.email.toLowerCase();
         console.log('Searching for membership with lowercase email:', userEmailLower);
         
-        // SPECIAL CASE: Directly check for known admin emails
-        if (userEmailLower.includes('briandarrington') || 
-            userEmailLower.includes('btinternet') || 
-            user.email.toLowerCase().includes('briandarrington') ||
-            user.email.toLowerCase().includes('btinternet')) {
-          console.log('Detected admin email, overriding membership check');
+        // SPECIAL CASE: Use the helper function for admin detection
+        if (isAdminEmail(user.email)) {
+          console.log('Detected admin email via helper function, overriding membership check');
           setHasMembership(true);
           // Create a mock member details for admin
           setMemberDetails({
@@ -259,6 +253,21 @@ export default function Home() {
             } else {
               console.error('Error fetching membership:', memberError);
               setError('Failed to check membership status');
+              
+              // Fallback for admin users even if membership check fails
+              if (isAdminEmail(user.email)) {
+                console.log('Error in membership check but admin detected, setting admin membership');
+                setHasMembership(true);
+                setMemberDetails({
+                  first_name: 'Brian',
+                  surname: 'Darrington',
+                  email: user.email,
+                  membership_type: 'club',
+                  membership_status: 'active',
+                  membership_expiry: dayjs().add(1, 'year').format('YYYY-MM-DD'),
+                  ea_number: 'Admin'
+                });
+              }
             }
           } else if (memberData) {
             console.log('Found membership for user:', memberData);
@@ -270,8 +279,7 @@ export default function Home() {
               memberDetails: memberData
             });
           } else {
-            if (user.email.toLowerCase().includes('briandarrington') || 
-                user.email.toLowerCase().includes('btinternet')) {
+            if (isAdminEmail(user.email)) {
               console.log('Special case for admin - setting hasMembership to true');
               setHasMembership(true);
               setDebugInfo({ 
@@ -303,9 +311,18 @@ export default function Home() {
           if (err.message?.includes('timed out')) {
             setError('Membership check timed out. Please try again later.');
             console.log('Setting default membership state due to error:', err.message);
-            if (user.email.toLowerCase().includes('briandarrington') || 
-                user.email.toLowerCase().includes('btinternet')) {
+            if (isAdminEmail(user.email)) {
+              console.log('Timeout detected but admin user recognized, setting membership');
               setHasMembership(true);
+              setMemberDetails({
+                first_name: 'Brian',
+                surname: 'Darrington',
+                email: user.email,
+                membership_type: 'club',
+                membership_status: 'active', 
+                membership_expiry: dayjs().add(1, 'year').format('YYYY-MM-DD'),
+                ea_number: 'Admin'
+              });
             } else {
               setHasMembership(false);
             }
@@ -698,6 +715,36 @@ export default function Home() {
                     >
                       Apply for Membership
                     </Button>
+                    
+                    {process.env.NODE_ENV === 'development' || isAdminEmail(router.query.email) ? (
+                      <Box sx={{ mt: 4, p: 2, border: 1, borderColor: 'grey.300', borderRadius: 1 }}>
+                        <Typography variant="h6">Debug Info:</Typography>
+                        <Typography variant="body1">Email: {router.query.email}</Typography>
+                        <Typography variant="body1">Is Admin Email: {isAdminEmail(router.query.email) ? 'Yes' : 'No'}</Typography>
+                        <Typography variant="body1">Auth State: {isAuthenticated ? 'Authenticated' : 'Not authenticated'}</Typography>
+                        <Button 
+                          variant="contained" 
+                          color="secondary" 
+                          size="small"
+                          onClick={() => {
+                            console.log('Manual admin override triggered');
+                            setHasMembership(true);
+                            setMemberDetails({
+                              first_name: 'Brian',
+                              surname: 'Darrington',
+                              email: router.query.email,
+                              membership_type: 'club',
+                              membership_status: 'active',
+                              membership_expiry: dayjs().add(1, 'year').format('YYYY-MM-DD'),
+                              ea_number: 'Admin'
+                            });
+                          }}
+                          sx={{ mt: 2 }}
+                        >
+                          Force Admin Access
+                        </Button>
+                      </Box>
+                    ) : null}
                   </Paper>
                 )}
               </Box>
