@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useRouter } from 'next/router';
 import { supabase, refreshSession, isLoggedIn } from '../lib/supabaseClient';
 import { Container, Box, TextField, Button, Typography, Alert, Paper, CircularProgress } from '@mui/material';
 import Head from 'next/head';
+import { AuthContext } from '../contexts/AuthContext';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -14,6 +15,7 @@ export default function Login() {
   const [sessionRefreshAttempted, setSessionRefreshAttempted] = useState(false);
   const router = useRouter();
   const { returnUrl, mode: urlMode } = router.query;
+  const { user } = useContext(AuthContext) || {}; // Get global auth state
 
   // Set initial mode based on URL parameter
   useEffect(() => {
@@ -129,11 +131,15 @@ export default function Login() {
       try {
         setCheckingSession(true);
         
-        // First check if user is logged in
+        // First check if user is logged in via Supabase
         const loggedIn = await isLoggedIn();
         
+        // Also check if the avatar is visible in the header (DOM check)
+        const avatarVisible = typeof window !== 'undefined' && 
+                             document.querySelector('.MuiAvatar-root') !== null;
+        
         if (isMounted) {
-          if (loggedIn) {
+          if (loggedIn || avatarVisible) {
             console.log('User is already logged in, redirecting...');
             // Redirect to returnUrl if provided, otherwise to home
             const redirectTo = returnUrl || '/';
@@ -172,9 +178,21 @@ export default function Login() {
     checkTimeout = setTimeout(() => {
       if (isMounted && checkingSession) {
         console.log('Session check timed out, showing login form');
-        setCheckingSession(false);
+        
+        // One final check for avatar in header before showing login form
+        const avatarVisible = typeof window !== 'undefined' && 
+                             document.querySelector('.MuiAvatar-root') !== null;
+        
+        if (avatarVisible) {
+          // If avatar is visible but we're still on login page, force redirect
+          console.log('Avatar detected in header, forcing redirect');
+          const redirectTo = returnUrl || '/';
+          window.location.href = redirectTo; // Use direct location change
+        } else {
+          setCheckingSession(false);
+        }
       }
-    }, 5000); // 5 second timeout
+    }, 3000); // Reduced to 3 seconds for faster response
     
     return () => {
       isMounted = false;
@@ -182,7 +200,7 @@ export default function Login() {
     };
   }, [router, returnUrl, sessionRefreshAttempted]);
 
-  if (checkingSession) {
+  if (checkingSession || user) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />
