@@ -102,7 +102,9 @@ export default function Home() {
             
             // SPECIAL CASE: Directly check for known admin emails
             if (userEmailLower.includes('briandarrington') || 
-                userEmailLower.includes('btinternet.com')) {
+                userEmailLower.includes('btinternet') || 
+                userEmail.toLowerCase().includes('briandarrington') ||
+                userEmail.toLowerCase().includes('btinternet')) {
               console.log('Detected admin email, overriding membership check');
               setHasMembership(true);
               // Create a mock member details for admin
@@ -211,7 +213,9 @@ export default function Home() {
         
         // SPECIAL CASE: Directly check for known admin emails
         if (userEmailLower.includes('briandarrington') || 
-            userEmailLower.includes('btinternet.com')) {
+            userEmailLower.includes('btinternet') || 
+            user.email.toLowerCase().includes('briandarrington') ||
+            user.email.toLowerCase().includes('btinternet')) {
           console.log('Detected admin email, overriding membership check');
           setHasMembership(true);
           // Create a mock member details for admin
@@ -267,7 +271,7 @@ export default function Home() {
             });
           } else {
             if (user.email.toLowerCase().includes('briandarrington') || 
-                user.email.toLowerCase().includes('btinternet.com')) {
+                user.email.toLowerCase().includes('btinternet')) {
               console.log('Special case for admin - setting hasMembership to true');
               setHasMembership(true);
               setDebugInfo({ 
@@ -300,7 +304,7 @@ export default function Home() {
             setError('Membership check timed out. Please try again later.');
             console.log('Setting default membership state due to error:', err.message);
             if (user.email.toLowerCase().includes('briandarrington') || 
-                user.email.toLowerCase().includes('btinternet.com')) {
+                user.email.toLowerCase().includes('btinternet')) {
               setHasMembership(true);
             } else {
               setHasMembership(false);
