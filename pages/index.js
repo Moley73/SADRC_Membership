@@ -100,10 +100,15 @@ export default function Home() {
             const membershipTimeout = new Promise((_, reject) =>
               setTimeout(() => reject(new Error('Membership check timed out')), 5000)
             );
+            
+            // Make email search case-insensitive by converting to lowercase
+            const userEmailLower = userEmail.toLowerCase();
+            console.log('Searching for membership with lowercase email:', userEmailLower);
+            
             const membershipPromise = supabase
               .from('members')
               .select('*')
-              .eq('email', userEmail)
+              .ilike('email', userEmailLower) // Use ilike for case-insensitive matching
               .maybeSingle();
             
             const { data: memberData, error: memberError } = await Promise.race([
@@ -186,11 +191,17 @@ export default function Home() {
           const membershipTimeout = new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Membership check timed out')), 5000)
           );
+          
+          // Make email search case-insensitive by converting to lowercase
+          const userEmailLower = user.email.toLowerCase();
+          console.log('Searching for membership with lowercase email:', userEmailLower);
+          
           const membershipPromise = supabase
             .from('members')
             .select('*')
-            .eq('email', user.email)
+            .ilike('email', userEmailLower) // Use ilike for case-insensitive matching
             .maybeSingle();
+          
           const { data: memberData, error: memberError } = await Promise.race([
             membershipPromise,
             membershipTimeout
