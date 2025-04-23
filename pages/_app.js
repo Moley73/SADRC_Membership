@@ -10,12 +10,10 @@ import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
 import MenuIcon from '@mui/icons-material/Menu';
 import Head from 'next/head';
+import { AuthProvider, useAuthContext } from '../lib/AuthContext';
 
 export default function App({ Component, pageProps }) {
   const [mode, setMode] = useState('dark');
-  const [user, setUser] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [mobileMenuAnchorEl, setMobileMenuAnchorEl] = useState(null);
   const router = useRouter();
   
@@ -43,57 +41,76 @@ export default function App({ Component, pageProps }) {
     handleMobileMenuClose();
   };
 
-  useEffect(() => {
-    // Auth listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setUser(session?.user || null);
-        
-        if (session?.user) {
-          try {
-            // Simplified query to admin_list table with case-insensitive role check
-            const { data, error } = await supabase
-              .from('admin_list')
-              .select('role')
-              .eq('email', session.user.email)
-              .maybeSingle();
-              
-            if (error) {
-              console.error('Error fetching admin status:', error);
-              // Fallback to hardcoded admin list
-              const isAdmin = ['briandarrington@btinternet.com'].includes(session.user.email);
-              const isSuperAdmin = ['briandarrington@btinternet.com'].includes(session.user.email);
-              setIsAdmin(isAdmin);
-              setIsSuperAdmin(isSuperAdmin);
-              return;
-            }
-            
-            // Use case-insensitive matching for more flexibility
-            const role = data?.role?.toLowerCase() || '';
-            const isUserAdmin = role.includes('admin');
-            const isUserSuperAdmin = role.includes('super');
-            
-            setIsAdmin(isUserAdmin);
-            setIsSuperAdmin(isUserSuperAdmin);
-          } catch (err) {
-            console.error('Error checking admin status:', err);
-            // Fallback to hardcoded admin list
-            const isAdmin = ['briandarrington@btinternet.com'].includes(session.user.email);
-            const isSuperAdmin = ['briandarrington@btinternet.com'].includes(session.user.email);
-            setIsAdmin(isAdmin);
-            setIsSuperAdmin(isSuperAdmin);
-          }
-        } else {
-          setIsAdmin(false);
-          setIsSuperAdmin(false);
-        }
-      }
-    );
+  return (
+    <AuthProvider>
+      <AppContent 
+        Component={Component} 
+        pageProps={pageProps} 
+        mode={mode}
+        colorMode={colorMode}
+        theme={theme}
+        isMobile={isMobile}
+        mobileMenuAnchorEl={mobileMenuAnchorEl}
+        handleMobileMenuOpen={handleMobileMenuOpen}
+        handleMobileMenuClose={handleMobileMenuClose}
+        handleNavigation={handleNavigation}
+        router={router}
+      />
+    </AuthProvider>
+  );
+}
 
-    return () => {
-      subscription.unsubscribe();
+// Separate component that can access AuthContext
+function AppContent({ 
+  Component, 
+  pageProps, 
+  mode, 
+  colorMode, 
+  theme, 
+  isMobile, 
+  mobileMenuAnchorEl, 
+  handleMobileMenuOpen, 
+  handleMobileMenuClose, 
+  handleNavigation, 
+  router 
+}) {
+  const { user, isAdmin } = useAuthContext();
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      if (!user) {
+        setIsSuperAdmin(false);
+        return;
+      }
+      
+      try {
+        // Check if user has super admin role
+        const { data, error } = await supabase
+          .from('admin_list')
+          .select('role')
+          .ilike('email', user.email)  // Case-insensitive match
+          .maybeSingle();
+          
+        if (error) {
+          console.error('Error fetching admin status:', error);
+          // Fallback for known super admins
+          setIsSuperAdmin(['briandarrington@btinternet.com'].includes(user.email));
+          return;
+        }
+        
+        // Check for super_admin role
+        const role = data?.role?.toLowerCase() || '';
+        setIsSuperAdmin(role.includes('super'));
+      } catch (err) {
+        console.error('Error checking admin role:', err);
+        // Fallback for known super admins
+        setIsSuperAdmin(['briandarrington@btinternet.com'].includes(user.email));
+      }
     };
-  }, []);
+    
+    checkAdminRole();
+  }, [user]);
 
   return (
     <ColorModeContext.Provider value={colorMode}>
@@ -114,39 +131,43 @@ export default function App({ Component, pageProps }) {
               color: 'text.primary'
             }}
           >
-            <Container maxWidth="xl">
-              <Toolbar sx={{ justifyContent: 'space-between', py: { xs: 1, md: 0.5 } }}>
-                <Box 
+            <Toolbar>
+              <Typography 
+                variant="h6" 
+                component="div" 
+                sx={{ 
+                  flexGrow: 1, 
+                  fontWeight: 700, 
+                  color: 'primary.main',
+                  display: 'flex', 
+                  alignItems: 'center'
+                }}
+              >
+                <Link 
+                  color="inherit" 
+                  href="/" 
+                  underline="none"
                   sx={{ 
                     display: 'flex', 
                     alignItems: 'center',
-                    cursor: 'pointer'
+                    '&:hover': {
+                      color: 'primary.dark'
+                    }
                   }}
-                  onClick={() => router.push('/')}
                 >
-                  <Typography 
-                    variant="h6" 
-                    component="div" 
-                    sx={{ 
-                      fontWeight: 700,
-                      fontSize: { xs: '1.1rem', md: '1.25rem' },
-                      color: 'primary.main'
-                    }}
-                  >
-                    SADRC Membership
-                  </Typography>
-                </Box>
-                
-                {/* Desktop Navigation */}
-                <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center' }}>
+                  SADRC Membership
+                </Link>
+              </Typography>
+              {/* Desktop Navigation */}
+              {!isMobile ? (
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <Button 
                     color="inherit" 
                     onClick={() => router.push('/')}
                     sx={{ 
-                      mx: 1, 
-                      borderRadius: 2,
+                      mx: 1,
+                      borderRadius: 1,
                       ...(router.pathname === '/' && { 
-                        color: 'primary.main',
                         bgcolor: 'background.subtle'
                       })
                     }}
@@ -157,10 +178,9 @@ export default function App({ Component, pageProps }) {
                     color="inherit" 
                     onClick={() => router.push('/awards')}
                     sx={{ 
-                      mx: 1, 
-                      borderRadius: 2,
+                      mx: 1,
+                      borderRadius: 1,
                       ...(router.pathname.startsWith('/awards') && !router.pathname.includes('/manage') && { 
-                        color: 'primary.main',
                         bgcolor: 'background.subtle'
                       })
                     }}
@@ -171,10 +191,9 @@ export default function App({ Component, pageProps }) {
                     color="inherit" 
                     onClick={() => router.push('/relay')}
                     sx={{ 
-                      mx: 1, 
-                      borderRadius: 2,
+                      mx: 1,
+                      borderRadius: 1,
                       ...(router.pathname === '/relay' && { 
-                        color: 'primary.main',
                         bgcolor: 'background.subtle'
                       })
                     }}
@@ -185,10 +204,9 @@ export default function App({ Component, pageProps }) {
                     color="inherit" 
                     onClick={() => router.push('/xmas-party')}
                     sx={{ 
-                      mx: 1, 
-                      borderRadius: 2,
+                      mx: 1,
+                      borderRadius: 1,
                       ...(router.pathname === '/xmas-party' && { 
-                        color: 'primary.main',
                         bgcolor: 'background.subtle'
                       })
                     }}
@@ -200,10 +218,9 @@ export default function App({ Component, pageProps }) {
                       color="inherit" 
                       onClick={() => router.push('/admin')}
                       sx={{ 
-                        mx: 1, 
-                        borderRadius: 2,
+                        mx: 1,
+                        borderRadius: 1,
                         ...(router.pathname === '/admin' && { 
-                          color: 'primary.main',
                           bgcolor: 'background.subtle'
                         })
                       }}
@@ -216,10 +233,9 @@ export default function App({ Component, pageProps }) {
                       color="inherit" 
                       onClick={() => router.push('/manage')}
                       sx={{ 
-                        mx: 1, 
-                        borderRadius: 2,
+                        mx: 1,
+                        borderRadius: 1,
                         ...(router.pathname === '/manage' && { 
-                          color: 'primary.main',
                           bgcolor: 'background.subtle'
                         })
                       }}
@@ -232,10 +248,9 @@ export default function App({ Component, pageProps }) {
                       color="inherit" 
                       onClick={() => router.push('/awards/manage')}
                       sx={{ 
-                        mx: 1, 
-                        borderRadius: 2,
+                        mx: 1,
+                        borderRadius: 1,
                         ...(router.pathname === '/awards/manage' && { 
-                          color: 'primary.main',
                           bgcolor: 'background.subtle'
                         })
                       }}
@@ -243,64 +258,61 @@ export default function App({ Component, pageProps }) {
                       Manage Awards
                     </Button>
                   )}
-                </Box>
-                
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <ColorModeToggle />
-                  <Box sx={{ ml: 1 }}>
+                  <Box sx={{ mx: 1 }}>
+                    <ColorModeToggle />
+                  </Box>
+                  <Box sx={{ mx: 1 }}>
                     <AuthStatus />
                   </Box>
-                  {isMobile && (
-                    <IconButton
-                      color="inherit"
-                      aria-label="open menu"
-                      edge="end"
-                      onClick={handleMobileMenuOpen}
-                      sx={{ ml: 1 }}
-                    >
-                      <MenuIcon />
-                    </IconButton>
-                  )}
                 </Box>
-              </Toolbar>
-            </Container>
+              ) : (
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Box sx={{ mx: 0.5 }}>
+                    <ColorModeToggle />
+                  </Box>
+                  <Box sx={{ mx: 0.5 }}>
+                    <AuthStatus />
+                  </Box>
+                  <IconButton
+                    color="inherit"
+                    aria-label="open menu"
+                    aria-controls="mobile-menu"
+                    aria-haspopup="true"
+                    onClick={handleMobileMenuOpen}
+                    edge="end"
+                  >
+                    <MenuIcon />
+                  </IconButton>
+                </Box>
+              )}
+            </Toolbar>
           </AppBar>
+          
+          {/* Mobile menu */}
           {isMobile && (
             <Menu
-              id="menu-appbar"
+              id="mobile-menu"
               anchorEl={mobileMenuAnchorEl}
-              anchorOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
               keepMounted
-              transformOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
               open={Boolean(mobileMenuAnchorEl)}
               onClose={handleMobileMenuClose}
               PaperProps={{
-                elevation: 3,
+                elevation: 0,
                 sx: {
+                  overflow: 'visible',
+                  filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.15))',
                   mt: 1.5,
                   width: 200,
-                  borderRadius: 2,
-                  overflow: 'visible',
-                  '&:before': {
-                    content: '""',
-                    display: 'block',
-                    position: 'absolute',
-                    top: 0,
-                    right: 14,
-                    width: 10,
-                    height: 10,
-                    bgcolor: 'background.paper',
-                    transform: 'translateY(-50%) rotate(45deg)',
-                    zIndex: 0,
+                  '& .MuiAvatar-root': {
+                    width: 32,
+                    height: 32,
+                    ml: -0.5,
+                    mr: 1,
                   },
-                }
+                },
               }}
+              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
             >
               <MenuItem 
                 onClick={() => handleNavigation('/')}
