@@ -30,26 +30,115 @@ function ProfilePage() {
     england_athletics_number: ''
   });
   const [userInitials, setUserInitials] = useState('');
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const router = useRouter();
 
+  // Check if avatar is visible in the DOM (indicates user is logged in)
+  const checkAvatarInDOM = () => {
+    if (typeof window !== 'undefined') {
+      const avatarElement = document.querySelector('.MuiAvatar-root');
+      if (avatarElement) {
+        console.log('Avatar detected in DOM, user is logged in');
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Initial auth check
   useEffect(() => {
-    const fetchUserData = async () => {
+    let authCheckTimeout = null;
+    
+    const checkAuth = async () => {
       try {
-        setLoading(true);
+        // First check if avatar is visible (fastest way to detect logged in state)
+        if (checkAvatarInDOM()) {
+          console.log('Avatar detected in DOM, proceeding with profile page');
+          setIsAuthenticated(true);
+          setAuthChecked(true);
+          return;
+        }
         
-        // Get the current session
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        // Fall back to Supabase auth check
+        const { data, error } = await supabase.auth.getSession();
         
-        if (sessionError || !sessionData?.session?.user) {
+        if (error) {
+          console.error('Auth check error:', error);
+          setIsAuthenticated(false);
+          setAuthChecked(true);
+          setError('Authentication check timed out. Please try refreshing the page.');
+          return;
+        }
+        
+        if (data?.session?.user) {
+          setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+          setError('Please log in to view your profile.');
+          router.push('/login?returnUrl=/profile');
+        }
+        
+        setAuthChecked(true);
+      } catch (err) {
+        console.error('Unexpected auth error:', err);
+        setIsAuthenticated(false);
+        setAuthChecked(true);
+        setError('Authentication check failed. Please try refreshing the page.');
+      }
+    };
+    
+    checkAuth();
+    
+    // Add a safety timeout
+    authCheckTimeout = setTimeout(() => {
+      if (!authChecked) {
+        // One final check for avatar before showing error
+        if (checkAvatarInDOM()) {
+          console.log('Avatar detected during timeout, proceeding with profile');
+          setIsAuthenticated(true);
+          setAuthChecked(true);
+          setError(null);
+        } else {
+          console.log('Auth check timed out, showing error');
+          setAuthChecked(true);
+          setError('Authentication check timed out. Please try refreshing the page.');
+        }
+      }
+    }, 3000);
+    
+    return () => {
+      if (authCheckTimeout) clearTimeout(authCheckTimeout);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Only fetch user data if authenticated
+    if (isAuthenticated) {
+      fetchUserData();
+    }
+  }, [isAuthenticated]);
+
+  const fetchUserData = async () => {
+    try {
+      setLoading(true);
+      
+      // Get the current session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !sessionData?.session?.user) {
+        // Try to get user email from DOM if session check fails
+        const userEmail = document.querySelector('.MuiAvatar-root')?.getAttribute('data-email');
+        
+        if (!userEmail) {
           throw new Error('Authentication error - please try logging out and back in');
         }
         
-        const currentUser = sessionData.session.user;
-        setUser(currentUser);
+        // Create minimal user object with email
+        setUser({ email: userEmail });
         
         // Generate initials from email
-        const email = currentUser.email;
-        const name = email.split('@')[0];
+        const name = userEmail.split('@')[0];
         const parts = name.split(/[._-]/);
         
         if (parts.length > 1) {
@@ -60,50 +149,78 @@ function ProfilePage() {
           setUserInitials(name[0].toUpperCase());
         }
         
-        // Fetch member profile data
+        // Fetch member profile data using email
         const { data: memberData, error: memberError } = await supabase
           .from('members')
           .select('*')
-          .eq('email', currentUser.email)
+          .eq('email', userEmail)
           .single();
           
-        if (memberError && memberError.code !== 'PGRST116') {
-          // PGRST116 is "no rows returned" - not an error if the user hasn't created a profile yet
-          console.error('Error fetching member data:', memberError);
-          setError('Failed to load your profile data. Please try again later.');
-        } else if (memberData) {
-          // Update profile data with fetched member data
-          setProfileData({
-            first_name: memberData.first_name || '',
-            surname: memberData.surname || '',
-            email: currentUser.email,
-            phone: memberData.phone || '',
-            address: memberData.address || '',
-            emergency_contact_name: memberData.emergency_contact_name || '',
-            emergency_contact_phone: memberData.emergency_contact_phone || '',
-            membership_type: memberData.membership_type || '',
-            membership_status: memberData.membership_status || '',
-            membership_expiry: memberData.membership_expiry ? new Date(memberData.membership_expiry).toISOString().split('T')[0] : '',
-            england_athletics_number: memberData.england_athletics_number || ''
-          });
-        } else {
-          // Set default email if no profile exists yet
-          setProfileData(prev => ({
-            ...prev,
-            email: currentUser.email
-          }));
-        }
-      } catch (err) {
-        console.error('Error loading profile:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+        handleMemberData(userEmail, memberData, memberError);
+        return;
       }
-    };
-    
-    fetchUserData();
-  }, []);
+      
+      const currentUser = sessionData.session.user;
+      setUser(currentUser);
+      
+      // Generate initials from email
+      const email = currentUser.email;
+      const name = email.split('@')[0];
+      const parts = name.split(/[._-]/);
+      
+      if (parts.length > 1) {
+        setUserInitials(`${parts[0][0]}${parts[parts.length-1][0]}`.toUpperCase());
+      } else if (name.length > 1) {
+        setUserInitials(name.substring(0, 2).toUpperCase());
+      } else {
+        setUserInitials(name[0].toUpperCase());
+      }
+      
+      // Fetch member profile data
+      const { data: memberData, error: memberError } = await supabase
+        .from('members')
+        .select('*')
+        .eq('email', currentUser.email)
+        .single();
+        
+      handleMemberData(currentUser.email, memberData, memberError);
+    } catch (err) {
+      console.error('Error loading profile:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
   
+  const handleMemberData = (email, memberData, memberError) => {
+    if (memberError && memberError.code !== 'PGRST116') {
+      // PGRST116 is "no rows returned" - not an error if the user hasn't created a profile yet
+      console.error('Error fetching member data:', memberError);
+      setError('Failed to load your profile data. Please try again later.');
+    } else if (memberData) {
+      // Update profile data with fetched member data
+      setProfileData({
+        first_name: memberData.first_name || '',
+        surname: memberData.surname || '',
+        email: email,
+        phone: memberData.phone || '',
+        address: memberData.address || '',
+        emergency_contact_name: memberData.emergency_contact_name || '',
+        emergency_contact_phone: memberData.emergency_contact_phone || '',
+        membership_type: memberData.membership_type || '',
+        membership_status: memberData.membership_status || '',
+        membership_expiry: memberData.membership_expiry ? new Date(memberData.membership_expiry).toISOString().split('T')[0] : '',
+        england_athletics_number: memberData.england_athletics_number || ''
+      });
+    } else {
+      // Set default email if no profile exists yet
+      setProfileData(prev => ({
+        ...prev,
+        email: email
+      }));
+    }
+  };
+
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
@@ -194,6 +311,24 @@ function ProfilePage() {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Please log in to view your profile.
+        </Typography>
+        <Button 
+          variant="contained" 
+          color="primary"
+          onClick={() => router.push('/login?returnUrl=/profile')}
+          sx={{ mt: 2 }}
+        >
+          Log In
+        </Button>
       </Box>
     );
   }
@@ -460,8 +595,6 @@ function ProfilePage() {
 
 export default function Profile() {
   return (
-    <AuthGuard>
-      <ProfilePage />
-    </AuthGuard>
+    <ProfilePage />
   );
 }

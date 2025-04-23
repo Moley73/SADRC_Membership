@@ -236,6 +236,8 @@ export default function AuthStatus() {
                 fontSize: '0.875rem',
                 fontWeight: 'bold'
               }}
+              data-email={user.email}
+              data-authenticated="true"
             >
               {userInitials}
             </Avatar>
