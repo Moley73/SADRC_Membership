@@ -552,14 +552,25 @@ export default function ManagePage() {
         <DialogTitle>Add Administrator</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2, minWidth: 300 }}>
-            <TextField
-              label="Email Address"
-              fullWidth
-              margin="normal"
-              value={newUserEmail}
-              onChange={(e) => setNewUserEmail(e.target.value)}
-              helperText="User must have registered and created an account"
-            />
+            <FormControl fullWidth margin="normal">
+              <InputLabel id="member-select-label">Select Member</InputLabel>
+              <Select
+                labelId="member-select-label"
+                value={newUserEmail}
+                label="Select Member"
+                onChange={(e) => setNewUserEmail(e.target.value)}
+              >
+                <MenuItem value="">-- Select Member --</MenuItem>
+                {members.map((member) => (
+                  <MenuItem key={member.id} value={member.email}>
+                    {member.first_name} {member.surname} ({member.email})
+                  </MenuItem>
+                ))}
+              </Select>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                User must have registered and created an account
+              </Typography>
+            </FormControl>
             <FormControl fullWidth margin="normal">
               <InputLabel id="new-role-select-label">Role</InputLabel>
               <Select

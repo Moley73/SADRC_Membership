@@ -47,10 +47,18 @@ export default function AdminPage() {
   const [reportsExportMenu, setReportsExportMenu] = useState(null);
   const [exportType, setExportType] = useState('csv');
   const [openUpdateDialog, setOpenUpdateDialog] = useState(false);
+  const [openAddAdminDialog, setOpenAddAdminDialog] = useState(false);
+  const [selectedAdminMember, setSelectedAdminMember] = useState(null);
+  const [adminRole, setAdminRole] = useState('admin');
+  const [addAdminLoading, setAddAdminLoading] = useState(false);
+  const [addAdminError, setAddAdminError] = useState(null);
+  const [addAdminSuccess, setAddAdminSuccess] = useState(null);
+  const [adminList, setAdminList] = useState([]);
   const router = useRouter();
 
   useEffect(() => {
     fetchMembers();
+    fetchAdmins();
     // eslint-disable-next-line
   }, []);
 
@@ -87,6 +95,21 @@ export default function AdminPage() {
       setError('Failed to load members. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAdmins = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_list')
+        .select('*');
+      if (error) {
+        console.error('Error fetching admins:', error);
+      } else {
+        setAdminList(data || []);
+      }
+    } catch (err) {
+      console.error('Unexpected error fetching admins:', err);
     }
   };
 
@@ -248,6 +271,42 @@ export default function AdminPage() {
       setError('Failed to approve changes. Please try again.');
     } finally {
       setActionLoading((prev) => ({ ...prev, [memberId]: false }));
+    }
+  };
+
+  const handleAddAdmin = async () => {
+    setAddAdminLoading(true);
+    setAddAdminError(null);
+    setAddAdminSuccess(null);
+    if (!selectedAdminMember) {
+      setAddAdminError('Please select a member.');
+      setAddAdminLoading(false);
+      return;
+    }
+    try {
+      // Check if already admin
+      const alreadyAdmin = adminList.some(a => a.email === selectedAdminMember.email);
+      if (alreadyAdmin) {
+        setAddAdminError('This member is already an admin.');
+        setAddAdminLoading(false);
+        return;
+      }
+      const { error } = await supabase
+        .from('admin_list')
+        .insert([{ email: selectedAdminMember.email, role: adminRole }]);
+      if (error) {
+        setAddAdminError(error.message);
+      } else {
+        setAddAdminSuccess('Administrator added successfully!');
+        fetchAdmins();
+        setSelectedAdminMember(null);
+        setAdminRole('admin');
+        setTimeout(() => setOpenAddAdminDialog(false), 1200);
+      }
+    } catch (err) {
+      setAddAdminError('Failed to add administrator.');
+    } finally {
+      setAddAdminLoading(false);
     }
   };
 
@@ -624,6 +683,17 @@ export default function AdminPage() {
             </MenuItem>
           </Menu>
 
+          {/* Add Administrator Button */}
+          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={() => setOpenAddAdminDialog(true)}
+            >
+              Add Administrator
+            </Button>
+          </Box>
+
           {/* Members Table */}
           <Paper 
             elevation={3} 
@@ -955,6 +1025,62 @@ export default function AdminPage() {
             loading={actionLoading[selectedMember.id]}
           />
         )}
+        
+        {/* Add Administrator Dialog */}
+        <Dialog open={openAddAdminDialog} onClose={() => setOpenAddAdminDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Add Administrator</DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                Select a member to promote to administrator:
+              </Typography>
+              <TextField
+                select
+                label="Select Member"
+                value={selectedAdminMember ? selectedAdminMember.email : ''}
+                onChange={e => {
+                  const m = members.find(mem => mem.email === e.target.value);
+                  setSelectedAdminMember(m || null);
+                }}
+                fullWidth
+                SelectProps={{ native: true }}
+                sx={{ mb: 2 }}
+              >
+                <option value="">-- Select Member --</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.email}>
+                    {member.first_name} {member.surname} ({member.email})
+                  </option>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label="Role"
+                value={adminRole}
+                onChange={e => setAdminRole(e.target.value)}
+                fullWidth
+                SelectProps={{ native: true }}
+                sx={{ mb: 2 }}
+              >
+                <option value="admin">Admin</option>
+                <option value="super_admin">Super Admin</option>
+              </TextField>
+              {addAdminError && <Alert severity="error" sx={{ mb: 1 }}>{addAdminError}</Alert>}
+              {addAdminSuccess && <Alert severity="success" sx={{ mb: 1 }}>{addAdminSuccess}</Alert>}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenAddAdminDialog(false)}>Cancel</Button>
+            <Button
+              onClick={handleAddAdmin}
+              variant="contained"
+              color="primary"
+              disabled={addAdminLoading}
+            >
+              {addAdminLoading ? <CircularProgress size={22} /> : 'Add'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Container>
     </AuthGuard>
   );

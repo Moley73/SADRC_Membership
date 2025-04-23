@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, refreshSession, isLoggedIn } from '../lib/supabaseClient';
 import { Container, Box, TextField, Button, Typography, Alert, Paper, CircularProgress } from '@mui/material';
 import Head from 'next/head';
 
@@ -11,7 +11,9 @@ export default function Login() {
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('login');
   const [checkingSession, setCheckingSession] = useState(true);
+  const [sessionRefreshAttempted, setSessionRefreshAttempted] = useState(false);
   const router = useRouter();
+  const { returnUrl } = router.query;
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -41,8 +43,13 @@ export default function Login() {
         }
         
         if (data?.session) {
-          console.log('Login successful, redirecting to home');
-          router.push('/');
+          console.log('Login successful, redirecting to home or return URL');
+          // Store the token in localStorage for explicit use in API calls
+          localStorage.setItem('supabase-auth-token', data.session.access_token);
+          
+          // Redirect to returnUrl if provided, otherwise to home
+          const redirectTo = returnUrl || '/';
+          window.location.href = redirectTo; // Use window.location for full page reload
         } else {
           setError('Login failed. Please try again.');
         }
@@ -88,17 +95,38 @@ export default function Login() {
     const checkSession = async () => {
       try {
         setCheckingSession(true);
-        const { data } = await supabase.auth.getSession();
+        
+        // First check if user is logged in
+        const loggedIn = await isLoggedIn();
         
         if (isMounted) {
-          if (data?.session) {
-            router.push('/');
+          if (loggedIn) {
+            console.log('User is already logged in, redirecting...');
+            // Redirect to returnUrl if provided, otherwise to home
+            const redirectTo = returnUrl || '/';
+            router.push(redirectTo);
+            return;
           }
+          
+          // If not logged in but we haven't tried refreshing the session yet
+          if (!sessionRefreshAttempted) {
+            console.log('Attempting to refresh session...');
+            setSessionRefreshAttempted(true);
+            const session = await refreshSession();
+            
+            if (session && isMounted) {
+              console.log('Session refreshed successfully, redirecting...');
+              // Redirect to returnUrl if provided, otherwise to home
+              const redirectTo = returnUrl || '/';
+              router.push(redirectTo);
+              return;
+            }
+          }
+          
           setCheckingSession(false);
         }
       } catch (err) {
-        // Silent error handling for session check
-        console.log('Session check:', err);
+        console.error('Session check error:', err);
         if (isMounted) {
           setCheckingSession(false);
         }
@@ -110,12 +138,15 @@ export default function Login() {
     return () => {
       isMounted = false;
     };
-  }, [router]);
+  }, [router, returnUrl, sessionRefreshAttempted]);
 
   if (checkingSession) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />
+        <Typography variant="body2" sx={{ ml: 2 }}>
+          Checking authentication status...
+        </Typography>
       </Box>
     );
   }

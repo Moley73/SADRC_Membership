@@ -118,147 +118,261 @@ function PhaseSettingsManager() {
         }
       });
 
-      // Basic update with just the modified fields + id
-      const updateData = {
-        id: settings.id,
-        ...validFields,
-        updated_at: new Date().toISOString()
-      };
+      // Get the current user's token for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-      console.log("Sending update with data:", updateData);
+      if (!token) {
+        throw new Error('Authentication token not available');
+      }
 
-      const res = await fetch('/api/awards/settings', {
+      const response = await fetch('/api/awards/settings', {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(updateData),
+        body: JSON.stringify(validFields)
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
+      if (!response.ok) {
+        const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to update settings');
       }
 
-      const updated = await res.json();
-      setSettings(updated);
+      const updatedSettings = await response.json();
+      setSettings(updatedSettings);
+      setSuccess('Settings updated successfully');
       setEdited({});
-      setSuccess('Settings updated successfully.');
     } catch (err) {
-      console.error('Save error:', err);
-      setError(err.message || 'An error occurred while saving settings');
+      console.error('Error saving settings:', err);
+      setError(err.message || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <CircularProgress sx={{ mt: 2 }} />;
-  if (error) return <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>;
-  if (!settings) return null;
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
-  // Dynamic fields based on what's available in the settings object
+  if (error && !settings) {
+    return (
+      <Alert severity="error" sx={{ mt: 2 }}>
+        {error}
+      </Alert>
+    );
+  }
+
   return (
-    <Box sx={{ mt: 2 }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Typography>Current Phase:</Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Box sx={{ minWidth: 200 }}>
-            <select
-              value={edited.current_phase || settings.current_phase}
-              onChange={e => handleChange('current_phase', e.target.value)}
-            >
-              <option value="inactive">Inactive</option>
-              <option value="nomination">Nomination</option>
-              <option value="voting">Voting</option>
-              <option value="completed">Completed</option>
-            </select>
-          </Box>
-        </Box>
+    <Box sx={{ mt: 3 }}>
+      <Paper 
+        elevation={2} 
+        sx={{ 
+          p: 4, 
+          borderRadius: 2,
+          backgroundColor: 'background.paper',
+          mb: 4
+        }}
+      >
+        <Typography variant="h5" component="h2" sx={{ mb: 3, fontWeight: 600, color: 'primary.main' }}>
+          Awards Configuration
+        </Typography>
         
-        <Typography>Active Year:</Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Box sx={{ maxWidth: 200 }}>
-            <input
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
+        
+        {success && (
+          <Alert severity="success" sx={{ mb: 3 }}>
+            {success}
+          </Alert>
+        )}
+        
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
+          <Box sx={{ gridColumn: { xs: '1', md: '1 / 3' } }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+              Current Phase
+            </Typography>
+            <Box 
+              sx={{ 
+                p: 2, 
+                borderRadius: 1, 
+                border: '1px solid', 
+                borderColor: 'divider',
+                backgroundColor: 'background.subtle',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2
+              }}
+            >
+              <Box sx={{ flexGrow: 1 }}>
+                <select
+                  value={edited.current_phase ?? settings?.current_phase ?? ''}
+                  onChange={(e) => handleChange('current_phase', e.target.value)}
+                  style={{ 
+                    width: '100%',
+                    padding: '10px 12px',
+                    fontSize: '16px',
+                    borderRadius: '8px',
+                    border: '1px solid #ccc',
+                    backgroundColor: '#fff',
+                    color: '#333'
+                  }}
+                >
+                  <option value="setup">Setup</option>
+                  <option value="nomination">Nomination</option>
+                  <option value="voting">Voting</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </Box>
+              <Box sx={{ 
+                backgroundColor: 'primary.main', 
+                color: 'white', 
+                py: 0.5, 
+                px: 2, 
+                borderRadius: 4,
+                fontWeight: 'bold',
+                fontSize: '0.875rem'
+              }}>
+                {edited.current_phase ?? settings?.current_phase ?? 'Not Set'}
+              </Box>
+            </Box>
+          </Box>
+          
+          <Box>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+              Active Year
+            </Typography>
+            <TextField
+              fullWidth
               type="number"
-              value={edited.active_year || settings.active_year || ''}
-              onChange={e => handleChange('active_year', e.target.value)}
+              value={edited.active_year ?? settings?.active_year ?? new Date().getFullYear()}
+              onChange={(e) => handleChange('active_year', e.target.value)}
+              InputProps={{
+                sx: { borderRadius: 2 }
+              }}
+            />
+          </Box>
+          
+          <Box sx={{ gridColumn: { xs: '1', md: '1 / 3' } }}>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, color: 'primary.main' }}>
+              Nomination Period
+            </Typography>
+          </Box>
+          
+          <Box>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+              Nomination Start Date
+            </Typography>
+            <TextField
+              fullWidth
+              type="date"
+              value={edited.nomination_start_date ?? 
+                (settings?.nomination_start_date ? 
+                  new Date(settings.nomination_start_date).toISOString().split('T')[0] : 
+                  '')}
+              onChange={(e) => handleChange('nomination_start_date', e.target.value)}
+              InputProps={{
+                sx: { borderRadius: 2 }
+              }}
+            />
+          </Box>
+          
+          <Box>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+              Nomination End Date
+            </Typography>
+            <TextField
+              fullWidth
+              type="date"
+              value={edited.nomination_end_date ?? 
+                (settings?.nomination_end_date ? 
+                  new Date(settings.nomination_end_date).toISOString().split('T')[0] : 
+                  '')}
+              onChange={(e) => handleChange('nomination_end_date', e.target.value)}
+              InputProps={{
+                sx: { borderRadius: 2 }
+              }}
+            />
+          </Box>
+          
+          <Box sx={{ gridColumn: { xs: '1', md: '1 / 3' } }}>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, color: 'primary.main' }}>
+              Voting Period
+            </Typography>
+          </Box>
+          
+          <Box>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+              Voting Start Date
+            </Typography>
+            <TextField
+              fullWidth
+              type="date"
+              value={edited.voting_start_date ?? 
+                (settings?.voting_start_date ? 
+                  new Date(settings.voting_start_date).toISOString().split('T')[0] : 
+                  '')}
+              onChange={(e) => handleChange('voting_start_date', e.target.value)}
+              InputProps={{
+                sx: { borderRadius: 2 }
+              }}
+            />
+          </Box>
+          
+          <Box>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+              Voting End Date
+            </Typography>
+            <TextField
+              fullWidth
+              type="date"
+              value={edited.voting_end_date ?? 
+                (settings?.voting_end_date ? 
+                  new Date(settings.voting_end_date).toISOString().split('T')[0] : 
+                  '')}
+              onChange={(e) => handleChange('voting_end_date', e.target.value)}
+              InputProps={{
+                sx: { borderRadius: 2 }
+              }}
             />
           </Box>
         </Box>
-
-        {/* Only show UI for fields that actually exist in the settings */}
-        {settings.nomination_start_date !== undefined && (
-          <>
-            <Typography>Nomination Start Date:</Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Box sx={{ maxWidth: 250 }}>
-                <input
-                  type="date"
-                  value={edited.nomination_start_date || settings.nomination_start_date ? (edited.nomination_start_date || settings.nomination_start_date).slice(0,10) : ''}
-                  onChange={e => handleChange('nomination_start_date', e.target.value)}
-                />
-              </Box>
-            </Box>
-          </>
-        )}
         
-        {settings.nomination_end_date !== undefined && (
-          <>
-            <Typography>Nomination End Date:</Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Box sx={{ maxWidth: 250 }}>
-                <input
-                  type="date"
-                  value={edited.nomination_end_date || settings.nomination_end_date ? (edited.nomination_end_date || settings.nomination_end_date).slice(0,10) : ''}
-                  onChange={e => handleChange('nomination_end_date', e.target.value)}
-                />
-              </Box>
-            </Box>
-          </>
-        )}
-        
-        {settings.voting_start_date !== undefined && (
-          <>
-            <Typography>Voting Start Date:</Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Box sx={{ maxWidth: 250 }}>
-                <input
-                  type="date"
-                  value={edited.voting_start_date || settings.voting_start_date ? (edited.voting_start_date || settings.voting_start_date).slice(0,10) : ''}
-                  onChange={e => handleChange('voting_start_date', e.target.value)}
-                />
-              </Box>
-            </Box>
-          </>
-        )}
-        
-        {settings.voting_end_date !== undefined && (
-          <>
-            <Typography>Voting End Date:</Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Box sx={{ maxWidth: 250 }}>
-                <input
-                  type="date"
-                  value={edited.voting_end_date || settings.voting_end_date ? (edited.voting_end_date || settings.voting_end_date).slice(0,10) : ''}
-                  onChange={e => handleChange('voting_end_date', e.target.value)}
-                />
-              </Box>
-            </Box>
-          </>
-        )}
-        
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             variant="contained"
             color="primary"
             onClick={handleSave}
             disabled={saving || Object.keys(edited).length === 0}
+            sx={{ 
+              minWidth: 150,
+              py: 1.5,
+              boxShadow: 2,
+              '&:hover': {
+                boxShadow: 4
+              }
+            }}
           >
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? <CircularProgress size={24} /> : 'Save Changes'}
           </Button>
         </Box>
-        {success && <Alert severity="success">{success}</Alert>}
-        {error && <Alert severity="error">{error}</Alert>}
+      </Paper>
+      
+      <Box sx={{ mt: 3, p: 3, backgroundColor: 'background.subtle', borderRadius: 2 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          <strong>Note:</strong> Changes to the phase settings will affect what members can see and do in the Awards section. 
+          Make sure to set appropriate dates for each phase.
+        </Typography>
       </Box>
     </Box>
   );
