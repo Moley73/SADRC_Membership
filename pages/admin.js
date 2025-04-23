@@ -92,21 +92,93 @@ export default function AdminPage() {
   // Fetch members from API with authentication
   const fetchMembers = async () => {
     try {
+      setLoading(true);
       // Get the current session and access token
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      const res = await fetch('/api/members', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!res.ok) throw new Error('Failed to fetch members');
-      const data = await res.json();
-      setMembers(data || []);
+      if (!token) {
+        console.error('No access token available');
+        // Fallback to direct Supabase query
+        const { data, error } = await supabase
+          .from('members')
+          .select('*')
+          .order('created_at', { ascending: false });
+          
+        if (error) {
+          console.error('Error fetching members via Supabase:', error);
+          setError(error.message);
+        } else if (data) {
+          // Add default properties if they don't exist
+          const processedData = data.map(member => ({
+            ...member,
+            payment_status: member.payment_status || 'unpaid',
+            membership_status: member.membership_status || 'pending',
+            membership_expiry: member.membership_expiry || null
+          }));
+          
+          setMembers(processedData);
+          setFilteredMembers(processedData);
+        }
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/members', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (!res.ok) {
+          throw new Error(`Failed to fetch members: ${res.status} ${res.statusText}`);
+        }
+        
+        const data = await res.json();
+        
+        // Add default properties if they don't exist
+        const processedData = data.map(member => ({
+          ...member,
+          payment_status: member.payment_status || 'unpaid',
+          membership_status: member.membership_status || 'pending',
+          membership_expiry: member.membership_expiry || null
+        }));
+        
+        setMembers(processedData);
+        setFilteredMembers(processedData);
+      } catch (apiError) {
+        console.error('Error fetching members via API:', apiError);
+        
+        // Fallback to direct Supabase query
+        console.log('Falling back to direct Supabase query');
+        const { data, error } = await supabase
+          .from('members')
+          .select('*')
+          .order('created_at', { ascending: false });
+          
+        if (error) {
+          console.error('Error fetching members via Supabase fallback:', error);
+          setError(error.message);
+        } else if (data) {
+          // Add default properties if they don't exist
+          const processedData = data.map(member => ({
+            ...member,
+            payment_status: member.payment_status || 'unpaid',
+            membership_status: member.membership_status || 'pending',
+            membership_expiry: member.membership_expiry || null
+          }));
+          
+          setMembers(processedData);
+          setFilteredMembers(processedData);
+        }
+      }
     } catch (err) {
-      console.error('Error fetching members:', err);
+      console.error('Unexpected error in fetchMembers:', err);
+      setError('Failed to load members. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
