@@ -36,16 +36,108 @@ export default function Home() {
       setTimeoutReached(false);
     };
 
+    // Check if avatar is visible in the DOM (indicates user is logged in)
+    const checkAvatarInDOM = () => {
+      if (typeof window !== 'undefined') {
+        const avatarElement = document.querySelector('.MuiAvatar-root');
+        if (avatarElement) {
+          console.log('Avatar detected in DOM, user is logged in');
+          return true;
+        }
+      }
+      return false;
+    };
+
     // Timeout for the whole check (auth + membership)
     timeoutId = setTimeout(() => {
       didTimeout = true;
       setTimeoutReached(true);
-      setLoading(false);
-      setError('Membership check is taking longer than expected. Please try again later.');
+      
+      // Even if the auth check timed out, check if avatar is visible
+      if (checkAvatarInDOM()) {
+        setIsAuthenticated(true);
+        setError(null);
+      } else {
+        setLoading(false);
+        setError('Membership check is taking longer than expected. Please try again later.');
+      }
     }, 7000); // 7 seconds
 
     const checkDatabase = async () => {
       try {
+        // First check if avatar is visible (fastest way to detect logged in state)
+        if (checkAvatarInDOM()) {
+          setIsAuthenticated(true);
+          
+          // Continue with membership check
+          try {
+            // Get user email from supabase or from localStorage as fallback
+            let userEmail = null;
+            
+            // Try to get user from Supabase
+            const { data: userData } = await supabase.auth.getUser();
+            if (userData?.user?.email) {
+              userEmail = userData.user.email;
+            } else {
+              // Fallback: Try to get from session
+              const { data: sessionData } = await supabase.auth.getSession();
+              if (sessionData?.session?.user?.email) {
+                userEmail = sessionData.session.user.email;
+              }
+            }
+            
+            if (!userEmail) {
+              console.log('Could not determine user email');
+              finishLoading();
+              return;
+            }
+            
+            console.log('Current user:', userEmail);
+            
+            // Membership check with timeout
+            const membershipTimeout = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Membership check timed out')), 5000)
+            );
+            const membershipPromise = supabase
+              .from('members')
+              .select('*')
+              .eq('email', userEmail)
+              .maybeSingle();
+            
+            const { data: memberData, error: memberError } = await Promise.race([
+              membershipPromise,
+              membershipTimeout
+            ]);
+
+            if (memberError) {
+              if (memberError.code === '42P01' || 
+                  memberError.message?.includes('relation') || 
+                  memberError.message?.includes('does not exist')) {
+                console.log('Members table does not exist yet');
+                setHasMembership(false);
+                setDebugInfo({ error: 'Members table does not exist yet' });
+              } else {
+                console.error('Error fetching membership:', memberError);
+                setError('Failed to check membership status');
+              }
+            } else if (memberData) {
+              console.log('Found membership for user:', memberData);
+              setHasMembership(true);
+              setMemberDetails(memberData);
+            } else {
+              console.log('No membership found for user');
+              setHasMembership(false);
+            }
+          } catch (err) {
+            console.error('Error in membership check:', err);
+            setError('Error checking membership status');
+          }
+          
+          finishLoading();
+          return;
+        }
+        
+        // If avatar not found, proceed with traditional auth check
         // Auth check with timeout
         const authTimeout = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Auth check timed out')), 4000)
@@ -55,6 +147,16 @@ export default function Home() {
         try {
           ({ data, error: authError } = await Promise.race([userPromise, authTimeout]));
         } catch (e) {
+          // One more check for avatar before giving up
+          if (checkAvatarInDOM()) {
+            setIsAuthenticated(true);
+            setError(null);
+            
+            // Retry membership check
+            checkDatabase();
+            return;
+          }
+          
           setIsAuthenticated(false);
           setDebugInfo({ error: e.message });
           setError('Login check timed out.');
