@@ -1,48 +1,105 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { Button, Typography, Box, CircularProgress } from '@mui/material';
+import { 
+  Button, Typography, Box, CircularProgress, Avatar, 
+  Menu, MenuItem, IconButton, Tooltip, Divider
+} from '@mui/material';
 import { useRouter } from 'next/router';
+import LogoutIcon from '@mui/icons-material/Logout';
+import PersonIcon from '@mui/icons-material/Person';
 
 export default function AuthStatus() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [membershipChecked, setMembershipChecked] = useState(false);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [userInitials, setUserInitials] = useState('');
   const router = useRouter();
+  
+  const open = Boolean(anchorEl);
+  
+  const handleMenuOpen = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+  
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  // Memoize the generateInitials function to prevent unnecessary re-renders
+  const generateInitials = useCallback((email) => {
+    if (!email) return '';
+    
+    // Extract the part before @ in the email
+    const name = email.split('@')[0];
+    
+    // Split by common separators (., _, -)
+    const parts = name.split(/[._-]/);
+    
+    if (parts.length > 1) {
+      // If there are multiple parts, use first letter of first and last part
+      return `${parts[0][0]}${parts[parts.length-1][0]}`.toUpperCase();
+    } else if (name.length > 1) {
+      // If single word, use first two letters
+      return name.substring(0, 2).toUpperCase();
+    } else {
+      // Fallback to just the first letter
+      return name[0].toUpperCase();
+    }
+  }, []);
 
   useEffect(() => {
+    let mounted = true;
+    
     // Initial user check
     const getUser = async () => {
       try {
+        if (!mounted) return;
         setLoading(true);
+        
         // Use getSession instead of getUser for more reliable authentication
         const { data, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Error getting session:', error);
-          setUser(null);
-          setLoading(false);
+          if (mounted) {
+            setUser(null);
+            setLoading(false);
+          }
           return;
         }
+        
+        if (!mounted) return;
         
         if (!data?.session?.user) {
           console.log('No active session found');
-          setUser(null);
-          setLoading(false);
+          if (mounted) {
+            setUser(null);
+            setLoading(false);
+            setMembershipChecked(true);
+          }
           return;
         }
         
-        const user = data.session.user;
-        console.log('User authenticated:', user.email);
-        setUser(user);
+        const currentUser = data.session.user;
+        console.log('User authenticated:', currentUser.email);
         
-        // No need to check membership status in this component
-        // This was causing errors with the non-existent profiles table
+        if (mounted) {
+          setUser(currentUser);
+          setUserInitials(generateInitials(currentUser.email));
+          setLoading(false);
+          setMembershipChecked(true);
+        }
       } catch (err) {
-        console.error('Unexpected error getting user:', err);
-        setUser(null);
-      } finally {
-        setLoading(false);
-        setMembershipChecked(true);
+        // Don't log null errors which are normal when no session exists
+        if (err) {
+          console.error('Unexpected error getting user:', err);
+        }
+        if (mounted) {
+          setUser(null);
+          setLoading(false);
+          setMembershipChecked(true);
+        }
       }
     };
     
@@ -50,22 +107,38 @@ export default function AuthStatus() {
     
     // Set up auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email);
-      setUser(session?.user || null);
+      if (!mounted) return;
+      
+      // Only log meaningful auth events
+      if (event !== 'INITIAL_SESSION') {
+        console.log('Auth state changed:', event, session?.user?.email || 'No user');
+      }
+      
+      if (session?.user) {
+        setUser(session.user);
+        setUserInitials(generateInitials(session.user.email));
+      } else {
+        setUser(null);
+      }
+      
       setLoading(false);
       setMembershipChecked(true);
     });
     
+    // Cleanup function to prevent memory leaks and state updates after unmount
     return () => {
+      mounted = false;
       if (authListener?.subscription) {
         authListener.subscription.unsubscribe();
       }
     };
-  }, []);
+  }, [generateInitials]);
 
   const handleLogout = async () => {
     try {
       setLoading(true);
+      handleMenuClose();
+      
       // Use a more robust approach to sign out
       const { error } = await supabase.auth.signOut({ scope: 'global' });
       
@@ -74,9 +147,7 @@ export default function AuthStatus() {
         alert('Failed to log out. Please try again.');
       } else {
         console.log('Successfully signed out');
-        setUser(null);
-        // Force a page reload to clear any cached state
-        window.location.href = '/login';
+        // Don't navigate here - let the auth state change listener handle it
       }
     } catch (err) {
       console.error('Unexpected error during logout:', err);
@@ -84,6 +155,12 @@ export default function AuthStatus() {
     } finally {
       setLoading(false);
     }
+  };
+  
+  const handleProfile = () => {
+    handleMenuClose();
+    // Navigate to the profile page
+    router.push('/profile');
   };
 
   // Only show loading spinner briefly during initial load
@@ -93,18 +170,85 @@ export default function AuthStatus() {
 
   if (user) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="body2" color="inherit">
-          Logged in as {user.email}
-        </Typography>
-        <Button color="inherit" onClick={handleLogout} size="small" sx={{ ml: 1 }}>
-          Log Out
-        </Button>
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Tooltip title={`Logged in as ${user.email}`}>
+          <IconButton 
+            onClick={handleMenuOpen}
+            size="small"
+            aria-controls={open ? 'account-menu' : undefined}
+            aria-haspopup="true"
+            aria-expanded={open ? 'true' : undefined}
+            sx={{ ml: 1 }}
+          >
+            <Avatar 
+              sx={{ 
+                width: 32, 
+                height: 32, 
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
+                fontSize: '0.875rem',
+                fontWeight: 'bold'
+              }}
+            >
+              {userInitials}
+            </Avatar>
+          </IconButton>
+        </Tooltip>
+        
+        <Menu
+          id="account-menu"
+          anchorEl={anchorEl}
+          open={open}
+          onClose={handleMenuClose}
+          transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+          anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+          PaperProps={{
+            elevation: 3,
+            sx: {
+              overflow: 'visible',
+              filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.15))',
+              mt: 1,
+              minWidth: 180,
+              '& .MuiAvatar-root': {
+                width: 32,
+                height: 32,
+                ml: -0.5,
+                mr: 1,
+              }
+            },
+          }}
+        >
+          <Box sx={{ px: 2, py: 1 }}>
+            <Typography variant="subtitle2" noWrap>
+              {user.email}
+            </Typography>
+          </Box>
+          <Divider />
+          <MenuItem onClick={handleProfile}>
+            <PersonIcon fontSize="small" sx={{ mr: 1.5 }} />
+            Profile
+          </MenuItem>
+          <MenuItem onClick={handleLogout}>
+            <LogoutIcon fontSize="small" sx={{ mr: 1.5 }} />
+            Logout
+          </MenuItem>
+        </Menu>
       </Box>
     );
   } else {
     return (
-      <Button color="inherit" onClick={() => router.push('/login')} size="small">
+      <Button 
+        color="inherit" 
+        onClick={() => router.push('/login')} 
+        size="small"
+        variant="outlined"
+        sx={{ 
+          borderRadius: 4,
+          px: 2,
+          py: 0.5,
+          fontWeight: 'medium'
+        }}
+      >
         Log In
       </Button>
     );

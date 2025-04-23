@@ -102,10 +102,16 @@ export default function VotingSection({ categories }) {
       
       // Get the current session to include the token in the request
       const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
+      let token = sessionData?.session?.access_token;
       
       if (!token) {
-        throw new Error('Authentication error - please try logging out and back in');
+        console.log('No token available, attempting to refresh session');
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        token = refreshData?.session?.access_token;
+        
+        if (!token) {
+          throw new Error('Authentication error - please try logging out and back in');
+        }
       }
       
       // Submit vote
@@ -119,9 +125,56 @@ export default function VotingSection({ categories }) {
         body: JSON.stringify({ nominationId })
       });
       
+      // Handle specific error cases
+      if (res.status === 401) {
+        console.log('Token expired, attempting to refresh and retry');
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        const newToken = refreshData?.session?.access_token;
+        
+        if (newToken) {
+          const retryRes = await fetch('/api/awards/votes', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${newToken}`
+            },
+            credentials: 'include',
+            body: JSON.stringify({ nominationId })
+          });
+          
+          if (retryRes.ok) {
+            const newVote = await retryRes.json();
+            setMyVotes(prev => [...prev, newVote]);
+            setSuccess('Your vote has been submitted successfully!');
+            setVotingInProgress(false);
+            return;
+          }
+          
+          // If retry also failed, get detailed error
+          let errorText = await retryRes.text();
+          let errorMessage;
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || `Failed to submit vote (${retryRes.status})`;
+          } catch (e) {
+            errorMessage = `Failed to submit vote: ${retryRes.status} - ${errorText.substring(0, 100)}`;
+          }
+          throw new Error(errorMessage);
+        }
+        
+        throw new Error('Your session has expired. Please log out and log back in.');
+      }
+      
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to submit vote');
+        let errorText = await res.text();
+        let errorMessage;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || `Failed to submit vote (${res.status})`;
+        } catch (e) {
+          errorMessage = `Failed to submit vote: ${res.status} - ${errorText.substring(0, 100)}`;
+        }
+        throw new Error(errorMessage);
       }
       
       const newVote = await res.json();
@@ -132,7 +185,7 @@ export default function VotingSection({ categories }) {
       setSuccess('Your vote has been submitted successfully!');
     } catch (err) {
       console.error('Error submitting vote:', err);
-      setError(err.message);
+      setError(err.message || 'An unknown error occurred while submitting your vote');
     } finally {
       setVotingInProgress(false);
     }

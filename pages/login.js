@@ -13,7 +13,14 @@ export default function Login() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [sessionRefreshAttempted, setSessionRefreshAttempted] = useState(false);
   const router = useRouter();
-  const { returnUrl } = router.query;
+  const { returnUrl, mode: urlMode } = router.query;
+
+  // Set initial mode based on URL parameter
+  useEffect(() => {
+    if (urlMode === 'signup') {
+      setMode('signup');
+    }
+  }, [urlMode]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -73,8 +80,15 @@ export default function Login() {
           if (data.user.identities?.length === 0) {
             setError('This email is already registered. Please log in instead.');
           } else {
-            setError('Sign-up successful! Please check your email to confirm your account, then log in.');
+            // Store the token for API calls
+            if (data.session) {
+              localStorage.setItem('supabase-auth-token', data.session.access_token);
+            }
+            
+            // Redirect to the application form to complete registration
+            setError(null);
             setMode('login');
+            router.push('/apply');
           }
         } else {
           setError('Sign-up failed. Please try again.');
@@ -216,7 +230,7 @@ export default function Login() {
               
               <Box sx={{ mt: 2, textAlign: 'center' }}>
                 <Typography variant="body2">
-                  {mode === 'login' ? "Don't have an account? Contact the club secretary." : 'Already have an account?'}
+                  {mode === 'login' ? "Don't have an account? Sign up to create one." : 'Already have an account?'}
                 </Typography>
                 
                 <Button

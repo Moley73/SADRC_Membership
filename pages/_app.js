@@ -104,269 +104,166 @@ export default function App({ Component, pageProps }) {
         </Head>
         <CssBaseline />
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <AppBar position="sticky" elevation={1} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-            <Toolbar sx={{ justifyContent: 'space-between' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Typography 
-                  variant="h6" 
-                  component="div" 
+          <AppBar 
+            position="sticky" 
+            elevation={0}
+            sx={{ 
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              backgroundColor: 'background.paper',
+              color: 'text.primary'
+            }}
+          >
+            <Container maxWidth="xl">
+              <Toolbar sx={{ justifyContent: 'space-between', py: { xs: 1, md: 0.5 } }}>
+                <Box 
                   sx={{ 
-                    fontWeight: 800, 
-                    color: 'primary.main',
-                    cursor: 'pointer',
-                    display: 'flex',
+                    display: 'flex', 
                     alignItems: 'center',
-                    mr: { xs: 1, md: 3 },
-                    fontSize: { xs: '1rem', sm: '1.25rem' }
+                    cursor: 'pointer'
                   }}
                   onClick={() => router.push('/')}
                 >
-                  SADRC <Box component="span" sx={{ color: 'text.primary', ml: 0.5 }}>Members Area</Box>
-                </Typography>
-                {isMobile ? (
-                  <IconButton
-                    size="large"
-                    aria-label="navigation menu"
-                    aria-controls="menu-appbar"
-                    aria-haspopup="true"
-                    onClick={handleMobileMenuOpen}
-                    color="inherit"
-                    sx={{ ml: 1 }}
+                  <Typography 
+                    variant="h6" 
+                    component="div" 
+                    sx={{ 
+                      fontWeight: 700,
+                      fontSize: { xs: '1.1rem', md: '1.25rem' },
+                      color: 'primary.main'
+                    }}
                   >
-                    <MenuIcon />
-                  </IconButton>
-                ) : (
-                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    SADRC Membership
+                  </Typography>
+                </Box>
+                
+                {/* Desktop Navigation */}
+                <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center' }}>
+                  <Button 
+                    color="inherit" 
+                    onClick={() => router.push('/')}
+                    sx={{ 
+                      mx: 1, 
+                      borderRadius: 2,
+                      ...(router.pathname === '/' && { 
+                        color: 'primary.main',
+                        bgcolor: 'background.subtle'
+                      })
+                    }}
+                  >
+                    Home
+                  </Button>
+                  <Button 
+                    color="inherit" 
+                    onClick={() => router.push('/awards')}
+                    sx={{ 
+                      mx: 1, 
+                      borderRadius: 2,
+                      ...(router.pathname.startsWith('/awards') && !router.pathname.includes('/manage') && { 
+                        color: 'primary.main',
+                        bgcolor: 'background.subtle'
+                      })
+                    }}
+                  >
+                    Awards
+                  </Button>
+                  <Button 
+                    color="inherit" 
+                    onClick={() => router.push('/relay')}
+                    sx={{ 
+                      mx: 1, 
+                      borderRadius: 2,
+                      ...(router.pathname === '/relay' && { 
+                        color: 'primary.main',
+                        bgcolor: 'background.subtle'
+                      })
+                    }}
+                  >
+                    Relay
+                  </Button>
+                  <Button 
+                    color="inherit" 
+                    onClick={() => router.push('/xmas-party')}
+                    sx={{ 
+                      mx: 1, 
+                      borderRadius: 2,
+                      ...(router.pathname === '/xmas-party' && { 
+                        color: 'primary.main',
+                        bgcolor: 'background.subtle'
+                      })
+                    }}
+                  >
+                    Xmas Party
+                  </Button>
+                  {isAdmin && (
                     <Button 
                       color="inherit" 
+                      onClick={() => router.push('/admin')}
                       sx={{ 
-                        fontWeight: 600, 
-                        borderRadius: '4px',
-                        px: 1.5,
-                        minWidth: 'auto',
-                        '&:hover': { backgroundColor: 'background.subtle' },
-                        ...(router.pathname === '/' && { 
+                        mx: 1, 
+                        borderRadius: 2,
+                        ...(router.pathname === '/admin' && { 
                           color: 'primary.main',
-                          position: 'relative',
-                          '&::after': {
-                            content: '""',
-                            position: 'absolute',
-                            bottom: 6,
-                            left: 10,
-                            right: 10,
-                            height: 3,
-                            borderRadius: 1.5,
-                            backgroundColor: 'primary.main'
-                          }
+                          bgcolor: 'background.subtle'
                         })
-                      }} 
-                      onClick={() => router.push('/')}
+                      }}
                     >
-                      HOME
+                      Admin
                     </Button>
+                  )}
+                  {isSuperAdmin && (
                     <Button 
                       color="inherit" 
+                      onClick={() => router.push('/manage')}
                       sx={{ 
-                        fontWeight: 600, 
-                        borderRadius: '4px',
-                        px: 1.5,
-                        minWidth: 'auto',
-                        '&:hover': { backgroundColor: 'background.subtle' },
-                        ...(router.pathname === '/resources' && { 
+                        mx: 1, 
+                        borderRadius: 2,
+                        ...(router.pathname === '/manage' && { 
                           color: 'primary.main',
-                          position: 'relative',
-                          '&::after': {
-                            content: '""',
-                            position: 'absolute',
-                            bottom: 6,
-                            left: 10,
-                            right: 10,
-                            height: 3,
-                            borderRadius: 1.5,
-                            backgroundColor: 'primary.main'
-                          }
+                          bgcolor: 'background.subtle'
                         })
-                      }} 
-                      onClick={() => router.push('/resources')}
+                      }}
                     >
-                      RESOURCES
+                      Manage
                     </Button>
+                  )}
+                  {isSuperAdmin && (
                     <Button 
                       color="inherit" 
+                      onClick={() => router.push('/awards/manage')}
                       sx={{ 
-                        fontWeight: 600, 
-                        borderRadius: '4px',
-                        px: 1.5,
-                        minWidth: 'auto',
-                        '&:hover': { backgroundColor: 'background.subtle' },
-                        ...(router.pathname.startsWith('/awards') && !router.pathname.includes('/manage') && { 
+                        mx: 1, 
+                        borderRadius: 2,
+                        ...(router.pathname === '/awards/manage' && { 
                           color: 'primary.main',
-                          position: 'relative',
-                          '&::after': {
-                            content: '""',
-                            position: 'absolute',
-                            bottom: 6,
-                            left: 10,
-                            right: 10,
-                            height: 3,
-                            borderRadius: 1.5,
-                            backgroundColor: 'primary.main'
-                          }
+                          bgcolor: 'background.subtle'
                         })
-                      }} 
-                      onClick={() => router.push('/awards')}
+                      }}
                     >
-                      AWARDS
+                      Manage Awards
                     </Button>
-                    <Button 
-                      color="inherit" 
-                      sx={{ 
-                        fontWeight: 600, 
-                        borderRadius: '4px',
-                        px: 1.5,
-                        minWidth: 'auto',
-                        '&:hover': { backgroundColor: 'background.subtle' },
-                        ...(router.pathname === '/relay' && { 
-                          color: 'primary.main',
-                          position: 'relative',
-                          '&::after': {
-                            content: '""',
-                            position: 'absolute',
-                            bottom: 6,
-                            left: 10,
-                            right: 10,
-                            height: 3,
-                            borderRadius: 1.5,
-                            backgroundColor: 'primary.main'
-                          }
-                        })
-                      }} 
-                      onClick={() => router.push('/relay')}
-                    >
-                      RELAY
-                    </Button>
-                    <Button 
-                      color="inherit" 
-                      sx={{ 
-                        fontWeight: 600, 
-                        borderRadius: '4px',
-                        px: 1.5,
-                        minWidth: 'auto',
-                        '&:hover': { backgroundColor: 'background.subtle' },
-                        ...(router.pathname === '/xmas-party' && { 
-                          color: 'primary.main',
-                          position: 'relative',
-                          '&::after': {
-                            content: '""',
-                            position: 'absolute',
-                            bottom: 6,
-                            left: 10,
-                            right: 10,
-                            height: 3,
-                            borderRadius: 1.5,
-                            backgroundColor: 'primary.main'
-                          }
-                        })
-                      }} 
-                      onClick={() => router.push('/xmas-party')}
-                    >
-                      XMAS PARTY
-                    </Button>
-                    {isAdmin && (
-                      <Button 
-                        color="inherit" 
-                        sx={{ 
-                          fontWeight: 600, 
-                          borderRadius: '4px',
-                          px: 1.5,
-                          minWidth: 'auto',
-                          '&:hover': { backgroundColor: 'background.subtle' },
-                          ...(router.pathname === '/admin' && { 
-                            color: 'primary.main',
-                            position: 'relative',
-                            '&::after': {
-                              content: '""',
-                              position: 'absolute',
-                              bottom: 6,
-                              left: 10,
-                              right: 10,
-                              height: 3,
-                              borderRadius: 1.5,
-                              backgroundColor: 'primary.main'
-                            }
-                          })
-                        }} 
-                        onClick={() => router.push('/admin')}
-                      >
-                        ADMIN
-                      </Button>
-                    )}
-                    {isSuperAdmin && (
-                      <Button 
-                        color="inherit" 
-                        sx={{ 
-                          fontWeight: 600, 
-                          borderRadius: '4px',
-                          px: 1.5,
-                          minWidth: 'auto',
-                          '&:hover': { backgroundColor: 'background.subtle' },
-                          ...(router.pathname === '/manage' && { 
-                            color: 'primary.main',
-                            position: 'relative',
-                            '&::after': {
-                              content: '""',
-                              position: 'absolute',
-                              bottom: 6,
-                              left: 10,
-                              right: 10,
-                              height: 3,
-                              borderRadius: 1.5,
-                              backgroundColor: 'primary.main'
-                            }
-                          })
-                        }} 
-                        onClick={() => router.push('/manage')}
-                      >
-                        MANAGE
-                      </Button>
-                    )}
-                    {isSuperAdmin && (
-                      <Button 
-                        color="inherit" 
-                        sx={{ 
-                          fontWeight: 600, 
-                          borderRadius: '4px',
-                          px: 1.5,
-                          minWidth: 'auto',
-                          '&:hover': { backgroundColor: 'background.subtle' },
-                          ...(router.pathname === '/awards/manage' && { 
-                            color: 'primary.main',
-                            position: 'relative',
-                            '&::after': {
-                              content: '""',
-                              position: 'absolute',
-                              bottom: 6,
-                              left: 10,
-                              right: 10,
-                              height: 3,
-                              borderRadius: 1.5,
-                              backgroundColor: 'primary.main'
-                            }
-                          })
-                        }} 
-                        onClick={() => router.push('/awards/manage')}
-                      >
-                        MANAGE AWARDS
-                      </Button>
-                    )}
+                  )}
+                </Box>
+                
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <ColorModeToggle />
+                  <Box sx={{ ml: 1 }}>
+                    <AuthStatus />
                   </Box>
-                )}
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <AuthStatus />
-                <ColorModeToggle />
-              </Box>
-            </Toolbar>
+                  {isMobile && (
+                    <IconButton
+                      color="inherit"
+                      aria-label="open menu"
+                      edge="end"
+                      onClick={handleMobileMenuOpen}
+                      sx={{ ml: 1 }}
+                    >
+                      <MenuIcon />
+                    </IconButton>
+                  )}
+                </Box>
+              </Toolbar>
+            </Container>
           </AppBar>
           {isMobile && (
             <Menu
@@ -418,22 +315,7 @@ export default function App({ Component, pageProps }) {
                   })
                 }}
               >
-                HOME
-              </MenuItem>
-              <MenuItem 
-                onClick={() => handleNavigation('/resources')}
-                sx={{ 
-                  borderRadius: 1,
-                  mx: 1,
-                  my: 0.5,
-                  px: 2,
-                  ...(router.pathname === '/resources' && { 
-                    color: 'primary.main',
-                    bgcolor: 'background.subtle'
-                  })
-                }}
-              >
-                RESOURCES
+                Home
               </MenuItem>
               <MenuItem 
                 onClick={() => handleNavigation('/awards')}
@@ -448,7 +330,7 @@ export default function App({ Component, pageProps }) {
                   })
                 }}
               >
-                AWARDS
+                Awards
               </MenuItem>
               <MenuItem 
                 onClick={() => handleNavigation('/relay')}
@@ -463,7 +345,7 @@ export default function App({ Component, pageProps }) {
                   })
                 }}
               >
-                RELAY
+                Relay
               </MenuItem>
               <MenuItem 
                 onClick={() => handleNavigation('/xmas-party')}
@@ -478,7 +360,7 @@ export default function App({ Component, pageProps }) {
                   })
                 }}
               >
-                XMAS PARTY
+                Xmas Party
               </MenuItem>
               {isAdmin && (
                 <MenuItem 
@@ -494,7 +376,7 @@ export default function App({ Component, pageProps }) {
                     })
                   }}
                 >
-                  ADMIN
+                  Admin
                 </MenuItem>
               )}
               {isSuperAdmin && (
@@ -511,7 +393,7 @@ export default function App({ Component, pageProps }) {
                     })
                   }}
                 >
-                  MANAGE
+                  Manage
                 </MenuItem>
               )}
               {isSuperAdmin && (
@@ -528,7 +410,7 @@ export default function App({ Component, pageProps }) {
                     })
                   }}
                 >
-                  MANAGE AWARDS
+                  Manage Awards
                 </MenuItem>
               )}
             </Menu>

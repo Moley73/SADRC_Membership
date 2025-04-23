@@ -6,15 +6,20 @@ import {
   Table, TableHead, TableRow, TableCell, TableBody, Paper, 
   Button, Tabs, Tab, TextField, Dialog, DialogTitle, 
   DialogContent, DialogActions, Chip, Grid,
-  Card, CardContent, CardActions, Divider, Menu, MenuItem
+  Card, CardContent, CardActions, Divider, Menu, MenuItem,
+  IconButton, Tooltip, FormControl, FormLabel, RadioGroup,
+  FormControlLabel, Radio, Checkbox, FormGroup
 } from '@mui/material';
 import AuthGuard from '../components/AuthGuard';
 import DownloadIcon from '@mui/icons-material/Download';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
+import EditIcon from '@mui/icons-material/Edit';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import { exportMembersToPDF } from '../lib/pdfExportHelper';
 import MemberUpdateDialog from '../components/MemberUpdateDialog';
+import MembershipManagementDialog from '../components/MembershipManagementDialog';
 
 const STATUS_COLORS = {
   approved: 'success',
@@ -39,7 +44,10 @@ export default function AdminPage() {
     optInCompetitions: 0,
     optInAagaChallenge: 0,
     paid: 0,
-    pendingUpdates: 0
+    pendingUpdates: 0,
+    active: 0,
+    pendingMembership: 0,
+    expired: 0
   });
   const [openMemberDialog, setOpenMemberDialog] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
@@ -54,6 +62,18 @@ export default function AdminPage() {
   const [addAdminError, setAddAdminError] = useState(null);
   const [addAdminSuccess, setAddAdminSuccess] = useState(null);
   const [adminList, setAdminList] = useState([]);
+  const [openMembershipDialog, setOpenMembershipDialog] = useState(false);
+  const [openExportDialog, setOpenExportDialog] = useState(false);
+  const [exportFormat, setExportFormat] = useState('csv');
+  const [exportReportType, setExportReportType] = useState('summary');
+  const [exportFields, setExportFields] = useState({
+    personal: true,
+    contact: true,
+    membership: true,
+    preferences: true,
+    ea: true
+  });
+  const [exportLoading, setExportLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -81,10 +101,12 @@ export default function AdminPage() {
         console.error('Error fetching members:', error);
         setError(error.message);
       } else if (data) {
-        // Add payment_status property if it doesn't exist
+        // Add default properties if they don't exist
         const processedData = data.map(member => ({
           ...member,
-          payment_status: member.payment_status || 'unpaid'
+          payment_status: member.payment_status || 'unpaid',
+          membership_status: member.membership_status || 'pending',
+          membership_expiry: member.membership_expiry || null
         }));
         
         setMembers(processedData);
@@ -119,29 +141,25 @@ export default function AdminPage() {
     // Apply search term filter
     if (searchTerm) {
       filtered = filtered.filter(member => 
-        (member.first_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (member.surname || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (member.email || '').toLowerCase().includes(searchTerm.toLowerCase())
+        member.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.ea_number?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
     // Apply status filter
     if (activeFilter !== 'all') {
-      switch (activeFilter) {
-        case 'approved':
-          filtered = filtered.filter(m => m.status === 'approved');
-          break;
-        case 'pending':
-          filtered = filtered.filter(m => !m.status || m.status === 'pending');
-          break;
-        case 'paid':
-          filtered = filtered.filter(m => m.payment_status === 'paid');
-          break;
-        case 'pendingUpdates':
-          filtered = filtered.filter(m => m.pending_update === true);
-          break;
-        default:
-          break;
+      if (activeFilter === 'pending_updates') {
+        filtered = filtered.filter(member => member.pending_update === true);
+      } else if (activeFilter === 'active') {
+        filtered = filtered.filter(member => member.membership_status === 'active');
+      } else if (activeFilter === 'pending') {
+        filtered = filtered.filter(member => member.membership_status === 'pending');
+      } else if (activeFilter === 'expired') {
+        filtered = filtered.filter(member => member.membership_status === 'expired');
+      } else {
+        filtered = filtered.filter(member => member.status === activeFilter);
       }
     }
     
@@ -149,18 +167,21 @@ export default function AdminPage() {
   };
 
   const calculateStats = () => {
-    const stats = {
+    const newStats = {
       total: members.length,
       approved: members.filter(m => m.status === 'approved').length,
-      pending: members.filter(m => !m.status || m.status === 'pending').length,
+      pending: members.filter(m => m.status === 'pending').length,
       rejected: members.filter(m => m.status === 'rejected').length,
-      optInCompetitions: members.filter(m => m.opt_in_competitions).length,
-      optInAagaChallenge: members.filter(m => m.opt_in_aaga_challenge).length,
+      optInCompetitions: members.filter(m => m.opt_in_competitions === true).length,
+      optInAagaChallenge: members.filter(m => m.opt_in_aaga_challenge === true).length,
       paid: members.filter(m => m.payment_status === 'paid').length,
-      pendingUpdates: members.filter(m => m.pending_update).length
+      pendingUpdates: members.filter(m => m.pending_update === true).length,
+      active: members.filter(m => m.membership_status === 'active').length,
+      pendingMembership: members.filter(m => m.membership_status === 'pending').length,
+      expired: members.filter(m => m.membership_status === 'expired').length
     };
     
-    setStats(stats);
+    setStats(newStats);
   };
 
   const handleStatus = async (id, status) => {
@@ -243,10 +264,32 @@ export default function AdminPage() {
     setSelectedMember(member);
     setOpenMemberDialog(true);
   };
-
+  
   const handleViewUpdate = (member) => {
     setSelectedMember(member);
     setOpenUpdateDialog(true);
+  };
+  
+  const handleManageMembership = (member) => {
+    setSelectedMember(member);
+    setOpenMembershipDialog(true);
+  };
+  
+  const handleMemberUpdated = (updatedMember) => {
+    // Update the member in the members array
+    const updatedMembers = members.map(m => 
+      m.id === updatedMember.id ? updatedMember : m
+    );
+    setMembers(updatedMembers);
+    
+    // Also update the selected member
+    if (selectedMember && selectedMember.id === updatedMember.id) {
+      setSelectedMember(updatedMember);
+    }
+    
+    // Recalculate stats and filtered members
+    calculateStats();
+    filterMembers();
   };
 
   const handleApproveChanges = async (memberId) => {
@@ -311,7 +354,6 @@ export default function AdminPage() {
   };
 
   const openExportMenu = (event) => {
-    console.log('openExportMenu called', event.currentTarget); // Debug log
     setExportMenu(event.currentTarget);
   };
 
@@ -327,24 +369,110 @@ export default function AdminPage() {
     setReportsExportMenu(null);
   };
 
+  const handleOpenExportDialog = () => {
+    closeExportMenu();
+    setOpenExportDialog(true);
+  };
+
   const handleExportCSV = (fromReports = false) => {
     try {
-      // Create CSV content
-      const headers = ['First Name', 'Surname', 'Email', 'Date of Birth', 'Status', 'Payment', 'Competitions', 'AaGA Challenge', 'Update Pending'];
-      const csvRows = [headers];
+      setExportLoading(true);
       
-      filteredMembers.forEach(member => {
-        const row = [
-          member.first_name || '',
-          member.surname || '',
-          member.email || '',
-          member.date_of_birth || '',
-          member.status || 'pending',
-          member.payment_status || 'unpaid',
-          member.opt_in_competitions ? 'Yes' : 'No',
-          member.opt_in_aaga_challenge ? 'Yes' : 'No',
-          member.pending_update ? 'Yes' : 'No'
-        ];
+      // Determine which fields to include based on export options
+      const fieldsToInclude = [];
+      
+      if (exportFields.personal) {
+        fieldsToInclude.push('First Name', 'Surname', 'Date of Birth');
+      }
+      
+      if (exportFields.contact) {
+        fieldsToInclude.push('Email', 'Phone', 'Address', 'Post Code');
+      }
+      
+      if (exportFields.membership) {
+        fieldsToInclude.push('Membership Status', 'Membership Type', 'Expiry Date', 'Payment Status');
+      }
+      
+      if (exportFields.preferences) {
+        fieldsToInclude.push('Competitions', 'AaGA Challenge', 'Photos Opt-out');
+      }
+      
+      if (exportFields.ea) {
+        fieldsToInclude.push('EA Number');
+      }
+      
+      // Filter members based on report type
+      let membersToExport = [...filteredMembers];
+      if (exportReportType === 'active') {
+        membersToExport = membersToExport.filter(m => m.membership_status === 'active');
+      } else if (exportReportType === 'pending') {
+        membersToExport = membersToExport.filter(m => m.membership_status === 'pending');
+      } else if (exportReportType === 'expired') {
+        membersToExport = membersToExport.filter(m => m.membership_status === 'expired');
+      } else if (exportReportType === 'competitions') {
+        membersToExport = membersToExport.filter(m => m.opt_in_competitions);
+      } else if (exportReportType === 'aaga') {
+        membersToExport = membersToExport.filter(m => m.opt_in_aaga_challenge);
+      }
+      
+      // Create CSV content with selected fields
+      const csvRows = [fieldsToInclude];
+      
+      membersToExport.forEach(member => {
+        const row = [];
+        
+        fieldsToInclude.forEach(field => {
+          switch(field) {
+            case 'First Name':
+              row.push(member.first_name || '');
+              break;
+            case 'Surname':
+              row.push(member.surname || '');
+              break;
+            case 'Email':
+              row.push(member.email || '');
+              break;
+            case 'Phone':
+              row.push(member.phone || '');
+              break;
+            case 'Date of Birth':
+              row.push(member.date_of_birth || '');
+              break;
+            case 'Address':
+              row.push(member.address || '');
+              break;
+            case 'Post Code':
+              row.push(member.post_code || '');
+              break;
+            case 'Membership Status':
+              row.push(member.membership_status || 'pending');
+              break;
+            case 'Membership Type':
+              row.push(member.membership_type || '');
+              break;
+            case 'Expiry Date':
+              row.push(member.membership_expiry || '');
+              break;
+            case 'Payment Status':
+              row.push(member.payment_status || 'unpaid');
+              break;
+            case 'Competitions':
+              row.push(member.opt_in_competitions ? 'Yes' : 'No');
+              break;
+            case 'AaGA Challenge':
+              row.push(member.opt_in_aaga_challenge ? 'Yes' : 'No');
+              break;
+            case 'Photos Opt-out':
+              row.push(member.opt_out_photos ? 'Yes' : 'No');
+              break;
+            case 'EA Number':
+              row.push(member.ea_number || '');
+              break;
+            default:
+              row.push('');
+          }
+        });
+        
         csvRows.push(row);
       });
       
@@ -355,630 +483,349 @@ export default function AdminPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `members-export-${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `members-${exportReportType}-${new Date().toISOString().split('T')[0]}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       
-      // Close the appropriate menu
-      if (fromReports) {
-        closeReportsExportMenu();
-      } else {
-        closeExportMenu();
-      }
+      setOpenExportDialog(false);
     } catch (err) {
       console.error('Export error:', err);
       alert('Failed to export data. Please try again.');
+    } finally {
+      setExportLoading(false);
     }
   };
-  
-  const handleExportPDF = (pdfType, fromReports = false) => {
+
+  const handleExportPDF = () => {
     try {
-      exportMembersToPDF(filteredMembers, pdfType);
+      setExportLoading(true);
       
-      // Close the appropriate menu
-      if (fromReports) {
-        closeReportsExportMenu();
-      } else {
-        closeExportMenu();
+      // Filter members based on report type
+      let membersToExport = [...filteredMembers];
+      if (exportReportType === 'active') {
+        membersToExport = membersToExport.filter(m => m.membership_status === 'active');
+      } else if (exportReportType === 'pending') {
+        membersToExport = membersToExport.filter(m => m.membership_status === 'pending');
+      } else if (exportReportType === 'expired') {
+        membersToExport = membersToExport.filter(m => m.membership_status === 'expired');
+      } else if (exportReportType === 'competitions') {
+        membersToExport = membersToExport.filter(m => m.opt_in_competitions);
+      } else if (exportReportType === 'aaga') {
+        membersToExport = membersToExport.filter(m => m.opt_in_aaga_challenge);
       }
+      
+      exportMembersToPDF(membersToExport, exportReportType);
+      setOpenExportDialog(false);
     } catch (err) {
       console.error('PDF export error:', err);
       alert('Failed to export PDF. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleExport = () => {
+    if (exportFormat === 'csv') {
+      handleExportCSV();
+    } else {
+      handleExportPDF();
     }
   };
 
   return (
-    <AuthGuard adminOnly={true}>
-      <Container maxWidth="lg" sx={{ mt: 6, mb: 6 }}>
-        <Typography variant="h4" fontWeight={800} mb={2}>Admin Area</Typography>
-        <Typography variant="subtitle1" mb={4}>User Management & Membership Submissions</Typography>
+    <AuthGuard requiredRole="admin">
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+          <Typography variant="h4" component="h1" gutterBottom>
+            Membership Administration
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button 
+              variant="outlined" 
+              startIcon={<RefreshIcon />} 
+              onClick={fetchMembers}
+              disabled={loading}
+            >
+              Refresh
+            </Button>
+            <Button 
+              variant="contained" 
+              startIcon={<DownloadIcon />}
+              onClick={handleOpenExportDialog}
+              aria-controls="export-menu"
+              aria-haspopup="true"
+            >
+              Export
+            </Button>
+          </Box>
+        </Box>
         
-        {/* Dashboard Stats */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card 
-              sx={{ 
-                cursor: 'pointer',
-                transition: 'all 0.3s',
-                borderRadius: 2,
-                boxShadow: activeFilter === 'all' ? 6 : 2,
-                '&:hover': { 
-                  transform: 'translateY(-5px)', 
-                  boxShadow: 8 
-                },
-                bgcolor: activeFilter === 'all' ? 'primary.light' : 'background.paper',
-                border: activeFilter === 'all' ? '2px solid' : '1px solid',
-                borderColor: activeFilter === 'all' ? 'primary.main' : 'divider',
-                height: '100%'
-              }}
-              onClick={() => {
-                setActiveFilter('all');
-                setSearchTerm('');
-              }}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <Typography variant="h6" color="text.primary" gutterBottom fontWeight={500}>
-                  Total Members
-                </Typography>
-                <Typography variant="h3" fontWeight={700} sx={{ my: 1 }}>
-                  {stats.total}
-                </Typography>
-                <Typography variant="body2" color="text.primary">
-                  View all members
-                </Typography>
+        {/* Stats cards */}
+        <Grid container spacing={2} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="h5" color="primary">{stats.total}</Typography>
+                <Typography variant="body2" color="text.secondary">Total Members</Typography>
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card 
-              sx={{ 
-                cursor: 'pointer',
-                transition: 'all 0.3s',
-                borderRadius: 2,
-                boxShadow: activeFilter === 'approved' ? 6 : 2,
-                '&:hover': { 
-                  transform: 'translateY(-5px)', 
-                  boxShadow: 8 
-                },
-                bgcolor: activeFilter === 'approved' ? 'success.light' : 'background.paper',
-                border: activeFilter === 'approved' ? '2px solid' : '1px solid',
-                borderColor: activeFilter === 'approved' ? 'success.main' : 'divider',
-                height: '100%'
-              }}
-              onClick={() => setActiveFilter('approved')}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <Typography variant="h6" color="text.primary" gutterBottom fontWeight={500}>
-                  Approved
-                </Typography>
-                <Typography variant="h3" color="success.main" fontWeight={700} sx={{ my: 1 }}>
-                  {stats.approved}
-                </Typography>
-                <Typography variant="body2" color="text.primary">
-                  Approved members
-                </Typography>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="h5" color="success.main">{stats.active || 0}</Typography>
+                <Typography variant="body2" color="text.secondary">Active Members</Typography>
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card 
-              sx={{ 
-                cursor: 'pointer',
-                transition: 'all 0.3s',
-                borderRadius: 2,
-                boxShadow: activeFilter === 'pending' ? 6 : 2,
-                '&:hover': { 
-                  transform: 'translateY(-5px)', 
-                  boxShadow: 8 
-                },
-                bgcolor: activeFilter === 'pending' ? 'warning.light' : 'background.paper',
-                border: activeFilter === 'pending' ? '2px solid' : '1px solid',
-                borderColor: activeFilter === 'pending' ? 'warning.main' : 'divider',
-                height: '100%'
-              }}
-              onClick={() => setActiveFilter('pending')}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <Typography variant="h6" color="text.primary" gutterBottom fontWeight={500}>
-                  Pending
-                </Typography>
-                <Typography variant="h3" color="warning.main" fontWeight={700} sx={{ my: 1 }}>
-                  {stats.pending}
-                </Typography>
-                <Typography variant="body2" color="text.primary">
-                  Awaiting approval
-                </Typography>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="h5" color="warning.main">{stats.pendingMembership || 0}</Typography>
+                <Typography variant="body2" color="text.secondary">Pending Members</Typography>
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card 
-              sx={{ 
-                cursor: 'pointer',
-                transition: 'all 0.3s',
-                borderRadius: 2,
-                boxShadow: activeFilter === 'paid' ? 6 : 2,
-                '&:hover': { 
-                  transform: 'translateY(-5px)', 
-                  boxShadow: 8 
-                },
-                bgcolor: activeFilter === 'paid' ? 'info.light' : 'background.paper',
-                border: activeFilter === 'paid' ? '2px solid' : '1px solid',
-                borderColor: activeFilter === 'paid' ? 'info.main' : 'divider',
-                height: '100%'
-              }}
-              onClick={() => setActiveFilter('paid')}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <Typography variant="h6" color="text.primary" gutterBottom fontWeight={500}>
-                  Paid Members
-                </Typography>
-                <Typography variant="h3" color="info.main" fontWeight={700} sx={{ my: 1 }}>
-                  {stats.paid}
-                </Typography>
-                <Typography variant="body2" color="text.primary">
-                  Payment received
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={2.4}>
-            <Card 
-              sx={{ 
-                cursor: 'pointer',
-                transition: 'all 0.3s',
-                borderRadius: 2,
-                boxShadow: activeFilter === 'pendingUpdates' ? 6 : 2,
-                '&:hover': { 
-                  transform: 'translateY(-5px)', 
-                  boxShadow: 8 
-                },
-                bgcolor: activeFilter === 'pendingUpdates' ? 'secondary.light' : 'background.paper',
-                border: activeFilter === 'pendingUpdates' ? '2px solid' : '1px solid',
-                borderColor: activeFilter === 'pendingUpdates' ? 'secondary.main' : 'divider',
-                height: '100%'
-              }}
-              onClick={() => setActiveFilter('pendingUpdates')}
-            >
-              <CardContent sx={{ textAlign: 'center', p: 3 }}>
-                <Typography variant="h6" color="text.primary" gutterBottom fontWeight={500}>
-                  Updates Pending
-                </Typography>
-                <Typography variant="h3" color="secondary.main" fontWeight={700} sx={{ my: 1 }}>
-                  {stats.pendingUpdates}
-                </Typography>
-                <Typography variant="body2" color="text.primary">
-                  Changes to review
-                </Typography>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="h5" color="error.main">{stats.expired || 0}</Typography>
+                <Typography variant="body2" color="text.secondary">Expired Members</Typography>
               </CardContent>
             </Card>
           </Grid>
         </Grid>
         
-        <Box sx={{ mt: 4 }}>
-          {/* Search and Export */}
-          <Paper 
-            elevation={2} 
-            sx={{ 
-              p: 3, 
-              mb: 4, 
-              borderRadius: 2,
-              background: theme => theme.palette.mode === 'dark' 
-                ? 'linear-gradient(to right, rgba(66,66,66,0.95), rgba(66,66,66,0.9))' 
-                : 'linear-gradient(to right, rgba(255,255,255,0.95), rgba(255,255,255,0.9))'
-            }}
+        {/* Filter tabs */}
+        <Box sx={{ mb: 3 }}>
+          <Tabs 
+            value={activeFilter} 
+            onChange={(e, newValue) => setActiveFilter(newValue)}
+            variant="scrollable"
+            scrollButtons="auto"
           >
-            <Box sx={{ 
-              display: 'flex', 
-              flexDirection: {xs: 'column', md: 'row'}, 
-              justifyContent: 'space-between', 
-              alignItems: {xs: 'stretch', md: 'center'}, 
-              gap: 2 
-            }}>
-              <Box sx={{ 
-                display: 'flex', 
-                flexDirection: {xs: 'column', sm: 'row'}, 
-                alignItems: {xs: 'stretch', sm: 'center'},
-                gap: 2,
-                flexGrow: 1
-              }}>
-                <TextField 
-                  size="medium" 
-                  label="Search members" 
-                  variant="outlined" 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  fullWidth
-                  InputProps={{
-                    startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
-                    sx: { borderRadius: 2 }
-                  }}
-                />
-                <Button 
-                  startIcon={<RefreshIcon />} 
-                  onClick={fetchMembers} 
-                  disabled={loading}
-                  variant="outlined"
-                  size="large"
-                  sx={{ 
-                    borderRadius: 2,
-                    minWidth: {xs: '100%', sm: '120px'}
-                  }}
-                >
-                  Refresh
-                </Button>
-              </Box>
-              <Button 
-                startIcon={<DownloadIcon />} 
-                onClick={openExportMenu} 
-                variant="contained" 
-                color="primary"
-                size="large"
-                aria-controls="export-menu"
-                aria-haspopup="true"
-                sx={{ 
-                  borderRadius: 2,
-                  minWidth: {xs: '100%', md: '180px'}
-                }}
-              >
-                Export Data
-              </Button>
-            </Box>
-            
-            {/* Active Filter Indicator */}
-            {activeFilter !== 'all' && (
-              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-                <Typography variant="body2" sx={{ mr: 1 }}>Active Filter:</Typography>
-                <Chip 
-                  label={activeFilter === 'pendingUpdates' ? 'Updates Pending' : 
-                         activeFilter === 'approved' ? 'Approved' :
-                         activeFilter === 'pending' ? 'Pending' :
-                         activeFilter === 'paid' ? 'Paid Members' : activeFilter}
-                  color={activeFilter === 'pendingUpdates' ? 'secondary' : 
-                         activeFilter === 'approved' ? 'success' :
-                         activeFilter === 'pending' ? 'warning' :
-                         activeFilter === 'paid' ? 'info' : 'default'}
-                  onDelete={() => {
-                    setActiveFilter('all');
-                    setSearchTerm('');
-                  }}
-                  sx={{ borderRadius: 2 }}
-                />
-              </Box>
-            )}
-          </Paper>
-
-          {/* Export Menu */}
-          <Menu
-            id="export-menu"
-            anchorEl={exportMenu}
-            keepMounted
-            open={Boolean(exportMenu)}
-            onClose={closeExportMenu}
-            PaperProps={{
-              elevation: 3,
-              sx: { borderRadius: 2, mt: 1 }
-            }}
-          >
-            <MenuItem onClick={handleExportCSV}>
-              <DownloadIcon fontSize="small" sx={{ mr: 1 }} />
-              Export as CSV
-            </MenuItem>
-            <MenuItem onClick={() => handleExportPDF('summary')}>
-              <PictureAsPdfIcon fontSize="small" sx={{ mr: 1 }} />
-              Export Summary PDF
-            </MenuItem>
-            <MenuItem onClick={() => handleExportPDF('full')}>
-              <PictureAsPdfIcon fontSize="small" sx={{ mr: 1 }} />
-              Export Full Details PDF
-            </MenuItem>
-            <MenuItem onClick={() => handleExportPDF('competitions')}>
-              <PictureAsPdfIcon fontSize="small" sx={{ mr: 1 }} />
-              Export Competitions PDF
-            </MenuItem>
-            <MenuItem onClick={() => handleExportPDF('aaga')}>
-              <PictureAsPdfIcon fontSize="small" sx={{ mr: 1 }} />
-              Export AaGA Challenge PDF
-            </MenuItem>
-          </Menu>
-
-          {/* Add Administrator Button */}
-          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="contained"
-              color="secondary"
-              onClick={() => setOpenAddAdminDialog(true)}
-            >
-              Add Administrator
-            </Button>
+            <Tab label={`All (${stats.total})`} value="all" />
+            <Tab label={`Active (${stats.active || 0})`} value="active" />
+            <Tab label={`Pending (${stats.pendingMembership || 0})`} value="pending" />
+            <Tab label={`Expired (${stats.expired || 0})`} value="expired" />
+            <Tab label={`Approved (${stats.approved})`} value="approved" />
+            <Tab label={`Awaiting Approval (${stats.pending})`} value="pending_approval" />
+            <Tab label={`Pending Updates (${stats.pendingUpdates})`} value="pending_updates" />
+          </Tabs>
+        </Box>
+        
+        {/* Members table */}
+        <Paper sx={{ width: '100%', overflow: 'hidden', mb: 4 }}>
+          <Box sx={{ p: 2, display: 'flex', alignItems: 'center' }}>
+            <SearchIcon sx={{ color: 'action.active', mr: 1 }} />
+            <TextField
+              variant="outlined"
+              size="small"
+              placeholder="Search members..."
+              fullWidth
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </Box>
-
-          {/* Members Table */}
-          <Paper 
-            elevation={3} 
-            sx={{ 
-              borderRadius: 2, 
-              overflow: 'hidden',
-              mb: 4
-            }}
-          >
-            {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : error ? (
-              <Alert severity="error" sx={{ m: 2 }}>{error}</Alert>
-            ) : filteredMembers.length === 0 ? (
-              <Box sx={{ p: 4, textAlign: 'center' }}>
-                <Typography variant="h6" color="text.primary">No members found</Typography>
-                {searchTerm && (
-                  <Typography variant="body2" color="text.primary" sx={{ mt: 1 }}>
-                    Try adjusting your search or filters
-                  </Typography>
-                )}
-                {activeFilter !== 'all' && (
-                  <Button 
-                    variant="text" 
-                    color="primary" 
-                    onClick={() => {
-                      setActiveFilter('all');
-                      setSearchTerm('');
-                    }}
-                    sx={{ mt: 2 }}
-                  >
-                    Clear Filters
-                  </Button>
-                )}
-              </Box>
-            ) : (
-              <Table sx={{ minWidth: 650 }}>
-                <TableHead sx={{ 
-                  bgcolor: theme => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
-                  '& th': {
-                    color: theme => theme.palette.mode === 'dark' ? 'common.white' : 'text.primary',
-                    fontWeight: 'bold'
-                  }
-                }}>
-                  <TableRow>
-                    <TableCell>First Name</TableCell>
-                    <TableCell>Surname</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Date of Birth</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Payment</TableCell>
-                    <TableCell>Competitions</TableCell>
-                    <TableCell>AaGA</TableCell>
-                    <TableCell>Update Pending</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredMembers.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell>{m.first_name}</TableCell>
-                      <TableCell>{m.surname}</TableCell>
-                      <TableCell>{m.email}</TableCell>
-                      <TableCell>{m.date_of_birth}</TableCell>
-                      <TableCell>
-                        <Alert severity={STATUS_COLORS[m.status] || 'info'} sx={{ p: 0.5, m: 0, fontSize: 12, width: 'fit-content' }}>
-                          {m.status || 'pending'}
-                        </Alert>
-                      </TableCell>
-                      <TableCell>{m.payment_status === 'paid' ? 'Paid' : 'Unpaid'}</TableCell>
-                      <TableCell>{m.opt_in_competitions ? 'Yes' : 'No'}</TableCell>
-                      <TableCell>{m.opt_in_aaga_challenge ? 'Yes' : 'No'}</TableCell>
-                      <TableCell>
-                        {m.pending_update ? (
-                          <Alert severity="warning" sx={{ p: 0.5, m: 0, fontSize: 12 }}>Update Pending</Alert>
-                        ) : ''}
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Button 
+          <Table sx={{ minWidth: 650 }} size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Name</TableCell>
+                <TableCell>Email</TableCell>
+                <TableCell>Application Status</TableCell>
+                <TableCell>Membership Status</TableCell>
+                <TableCell>EA Number</TableCell>
+                <TableCell>Payment</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                    <CircularProgress size={30} />
+                  </TableCell>
+                </TableRow>
+              ) : filteredMembers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                    No members found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredMembers.map((member) => (
+                  <TableRow key={member.id} hover>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {member.first_name} {member.surname}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">{member.email}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={member.status || 'pending'} 
+                        color={STATUS_COLORS[member.status] || 'default'}
+                        size="small"
+                      />
+                      {member.pending_update && (
+                        <Chip 
+                          label="Update Pending" 
+                          color="info"
+                          size="small"
+                          sx={{ ml: 1 }}
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={member.membership_status || 'pending'} 
+                        color={
+                          member.membership_status === 'active' ? 'success' :
+                          member.membership_status === 'pending' ? 'warning' :
+                          member.membership_status === 'expired' ? 'error' : 'default'
+                        }
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {member.ea_number || 'Not registered'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={member.payment_status === 'paid' ? 'Paid' : 'Unpaid'} 
+                        color={member.payment_status === 'paid' ? 'success' : 'default'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Tooltip title="View Details">
+                          <IconButton 
                             size="small" 
-                            variant="outlined" 
-                            color="primary"
-                            onClick={() => handleViewMember(m)}
+                            onClick={() => handleViewMember(member)}
                           >
-                            VIEW
-                          </Button>
-                          <Button 
-                            size="small" 
-                            variant="outlined" 
-                            color="success"
-                            onClick={() => handleStatus(m.id, 'approved')}
-                            disabled={m.status === 'approved' || actionLoading[m.id]}
-                          >
-                            APPROVE
-                          </Button>
-                          <Button 
-                            size="small" 
-                            variant="outlined" 
-                            color="error"
-                            onClick={() => handleStatus(m.id, 'rejected')}
-                            disabled={m.status === 'rejected' || actionLoading[m.id]}
-                          >
-                            REJECT
-                          </Button>
-                          {m.pending_update && (
-                            <Button 
+                            <SearchIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {member.pending_update && (
+                          <Tooltip title="Review Updates">
+                            <IconButton 
                               size="small" 
-                              variant="contained" 
-                              color="warning"
-                              onClick={() => handleViewUpdate(m)}
+                              onClick={() => handleViewUpdate(member)}
+                              color="info"
                             >
-                              VIEW CHANGES
-                            </Button>
-                          )}
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </Paper>
-        </Box>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        <Tooltip title="Manage Membership">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleManageMembership(member)}
+                            color="primary"
+                          >
+                            <ManageAccountsIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </Paper>
         
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h6" gutterBottom>Membership Reports</Typography>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>Competition Participants</Typography>
-                  <Typography variant="body2" color="text.primary" paragraph>
-                    Members who have opted in to club competitions: {stats.optInCompetitions}
-                  </Typography>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="h6" gutterBottom>AaGA Challenge Participants</Typography>
-                  <Typography variant="body2" color="text.primary" paragraph>
-                    Members who have opted in to the AaGA Challenge: {stats.optInAagaChallenge}
-                  </Typography>
-                </CardContent>
-                <CardActions>
-                  <Button 
-                    size="small" 
-                    startIcon={<DownloadIcon />}
-                    onClick={openReportsExportMenu}
-                    variant="contained"
-                    color="primary"
-                  >
-                    Export Data
-                  </Button>
-                  <Menu
-                    id="reports-export-menu"
-                    anchorEl={reportsExportMenu}
-                    keepMounted
-                    open={Boolean(reportsExportMenu)}
-                    onClose={closeReportsExportMenu}
-                  >
-                    <MenuItem onClick={() => handleExportCSV(true)}>
-                      <DownloadIcon fontSize="small" style={{ marginRight: 8 }} />
-                      Export as CSV
-                    </MenuItem>
-                    <MenuItem onClick={() => handleExportPDF('summary', true)}>
-                      <PictureAsPdfIcon fontSize="small" style={{ marginRight: 8 }} />
-                      Export Summary PDF
-                    </MenuItem>
-                    <MenuItem onClick={() => handleExportPDF('full', true)}>
-                      <PictureAsPdfIcon fontSize="small" style={{ marginRight: 8 }} />
-                      Export Full Details PDF
-                    </MenuItem>
-                    <MenuItem onClick={() => handleExportPDF('competitions', true)}>
-                      <PictureAsPdfIcon fontSize="small" style={{ marginRight: 8 }} />
-                      Export Competitions PDF
-                    </MenuItem>
-                    <MenuItem onClick={() => handleExportPDF('aaga', true)}>
-                      <PictureAsPdfIcon fontSize="small" style={{ marginRight: 8 }} />
-                      Export AaGA Challenge PDF
-                    </MenuItem>
-                  </Menu>
-                </CardActions>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>Membership Status</Typography>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2">Approved:</Typography>
-                    <Typography variant="body2" fontWeight="bold">{stats.approved}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2">Pending:</Typography>
-                    <Typography variant="body2" fontWeight="bold">{stats.pending}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2">Rejected:</Typography>
-                    <Typography variant="body2" fontWeight="bold">{stats.rejected}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2">Paid:</Typography>
-                    <Typography variant="body2" fontWeight="bold" color="success.main">{stats.paid}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2">Total:</Typography>
-                    <Typography variant="body2" fontWeight="bold">{stats.total}</Typography>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </Box>
-        
-        {/* Member Detail Dialog */}
-        {openMemberDialog && selectedMember && (
+        {/* Member View Dialog */}
+        {selectedMember && (
           <Dialog open={openMemberDialog} onClose={() => setOpenMemberDialog(false)} maxWidth="md" fullWidth>
             <DialogTitle>
-              Member Details: {selectedMember.first_name} {selectedMember.surname}
+              Member Details
+              <Typography variant="subtitle2" color="text.secondary">
+                {selectedMember.first_name} {selectedMember.surname}
+              </Typography>
             </DialogTitle>
-            <DialogContent dividers>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2">Personal Information</Typography>
-                  <Box sx={{ mt: 1 }}>
+            <DialogContent>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" gutterBottom>Personal Information</Typography>
+                  <Box sx={{ ml: 2 }}>
                     <Typography variant="body2"><strong>Email:</strong> {selectedMember.email}</Typography>
-                    <Typography variant="body2"><strong>Date of Birth:</strong> {selectedMember.date_of_birth}</Typography>
-                    <Typography variant="body2"><strong>Gender:</strong> {selectedMember.gender}</Typography>
-                    <Typography variant="body2"><strong>Country of Birth:</strong> {selectedMember.country_of_birth}</Typography>
+                    <Typography variant="body2"><strong>Phone:</strong> {selectedMember.phone || 'Not provided'}</Typography>
+                    <Typography variant="body2"><strong>Date of Birth:</strong> {selectedMember.date_of_birth || 'Not provided'}</Typography>
+                    <Typography variant="body2"><strong>Gender:</strong> {selectedMember.gender || 'Not provided'}</Typography>
+                    <Typography variant="body2"><strong>Address:</strong> {selectedMember.address || 'Not provided'}</Typography>
+                    <Typography variant="body2"><strong>Post Code:</strong> {selectedMember.post_code || 'Not provided'}</Typography>
                   </Box>
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2">Contact Information</Typography>
-                  <Box sx={{ mt: 1 }}>
-                    <Typography variant="body2"><strong>Address:</strong> {selectedMember.address}</Typography>
-                    <Typography variant="body2"><strong>Post Code:</strong> {selectedMember.post_code}</Typography>
-                    <Typography variant="body2"><strong>Phone:</strong> {selectedMember.phone}</Typography>
+                
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" gutterBottom>Membership Details</Typography>
+                  <Box sx={{ ml: 2 }}>
+                    <Typography variant="body2">
+                      <strong>Application Status:</strong> {selectedMember.status || 'Pending'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Membership Status:</strong> {selectedMember.membership_status || 'Pending'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Membership Type:</strong> {
+                        selectedMember.membership_type === 'club' ? 'Club Membership' : 
+                        selectedMember.membership_type === 'ea' ? 'Club + EA Affiliation' : 
+                        selectedMember.membership_type || 'Not specified'
+                      }
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>EA Number:</strong> {selectedMember.ea_number || 'Not registered'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Membership Expiry:</strong> {selectedMember.membership_expiry || 'Not set'}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Payment Status:</strong> {selectedMember.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
+                    </Typography>
                   </Box>
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2">Emergency Contact</Typography>
-                  <Box sx={{ mt: 1 }}>
-                    <Typography variant="body2"><strong>Name:</strong> {selectedMember.emergency_contact_name}</Typography>
-                    <Typography variant="body2"><strong>Phone:</strong> {selectedMember.emergency_contact_phone}</Typography>
-                    <Typography variant="body2"><strong>Relationship:</strong> {selectedMember.emergency_contact_relationship}</Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2">Membership Details</Typography>
-                  <Box sx={{ mt: 1 }}>
-                    <Typography variant="body2"><strong>Type:</strong> {selectedMember.membership_type === 'club' ? 'Club Membership' : 'Club + EA Affiliation'}</Typography>
-                    <Typography variant="body2"><strong>Status:</strong> {selectedMember.status || 'pending'}</Typography>
-                    <Typography variant="body2"><strong>Payment Status:</strong> {selectedMember.payment_status === 'paid' ? 'Paid' : 'Unpaid'}</Typography>
-                    <Typography variant="body2"><strong>Created:</strong> {new Date(selectedMember.created_at).toLocaleString()}</Typography>
-                  </Box>
-                </Grid>
+                
                 <Grid item xs={12}>
-                  <Typography variant="subtitle2">Preferences</Typography>
-                  <Box sx={{ mt: 1 }}>
+                  <Divider sx={{ my: 1 }} />
+                  <Typography variant="subtitle1" gutterBottom>Emergency Contact</Typography>
+                  <Box sx={{ ml: 2 }}>
+                    <Typography variant="body2"><strong>Name:</strong> {selectedMember.emergency_contact_name || 'Not provided'}</Typography>
+                    <Typography variant="body2"><strong>Phone:</strong> {selectedMember.emergency_contact_phone || 'Not provided'}</Typography>
+                    <Typography variant="body2"><strong>Relationship:</strong> {selectedMember.emergency_contact_relationship || 'Not provided'}</Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <Divider sx={{ my: 1 }} />
+                  <Typography variant="subtitle1" gutterBottom>Preferences</Typography>
+                  <Box sx={{ ml: 2 }}>
                     <Typography variant="body2">
-                      <strong>Club Competitions:</strong> {selectedMember.opt_in_competitions ? 'Opted In' : 'Not Opted In'}
+                      <strong>Competitions Opt-in:</strong> {selectedMember.opt_in_competitions ? 'Yes' : 'No'}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>AaGA Challenge:</strong> {selectedMember.opt_in_aaga_challenge ? 'Opted In' : 'Not Opted In'}
+                      <strong>Photos Opt-out:</strong> {selectedMember.opt_out_photos ? 'Yes' : 'No'}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Photos:</strong> {selectedMember.opt_out_photos ? 'Opted Out' : 'Not Opted Out'}
+                      <strong>AaGA Challenge Opt-in:</strong> {selectedMember.opt_in_aaga_challenge ? 'Yes' : 'No'}
                     </Typography>
                   </Box>
                 </Grid>
-                {selectedMember.medical_conditions && (
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2">Medical Conditions</Typography>
-                    <Box sx={{ mt: 1 }}>
-                      <Typography variant="body2">{selectedMember.medical_conditions}</Typography>
-                    </Box>
-                  </Grid>
-                )}
+                
                 {selectedMember.signature_url && (
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2">Signature</Typography>
-                    <Box sx={{ mt: 1 }}>
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="subtitle1" gutterBottom>Signature</Typography>
+                    <Box sx={{ ml: 2 }}>
                       <img 
                         src={selectedMember.signature_url} 
-                        alt="Member Signature" 
+                        alt="Signature" 
                         style={{ maxWidth: '100%', maxHeight: '100px', border: '1px solid #eee' }} 
                       />
                     </Box>
@@ -1023,6 +870,16 @@ export default function AdminPage() {
             member={selectedMember}
             onApproveChanges={handleApproveChanges}
             loading={actionLoading[selectedMember.id]}
+          />
+        )}
+        
+        {/* Membership Management Dialog */}
+        {selectedMember && (
+          <MembershipManagementDialog
+            open={openMembershipDialog}
+            onClose={() => setOpenMembershipDialog(false)}
+            member={selectedMember}
+            onMemberUpdated={handleMemberUpdated}
           />
         )}
         
@@ -1078,6 +935,90 @@ export default function AdminPage() {
               disabled={addAdminLoading}
             >
               {addAdminLoading ? <CircularProgress size={22} /> : 'Add'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+        
+        {/* Export Options Dialog */}
+        <Dialog 
+          open={openExportDialog} 
+          onClose={() => setOpenExportDialog(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Export Membership Data</DialogTitle>
+          <DialogContent dividers>
+            <Box sx={{ mb: 3 }}>
+              <FormControl component="fieldset">
+                <FormLabel component="legend">Export Format</FormLabel>
+                <RadioGroup
+                  row
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value)}
+                >
+                  <FormControlLabel value="csv" control={<Radio />} label="CSV" />
+                  <FormControlLabel value="pdf" control={<Radio />} label="PDF" />
+                </RadioGroup>
+              </FormControl>
+            </Box>
+            
+            <Box sx={{ mb: 3 }}>
+              <FormControl component="fieldset">
+                <FormLabel component="legend">Report Type</FormLabel>
+                <RadioGroup
+                  value={exportReportType}
+                  onChange={(e) => setExportReportType(e.target.value)}
+                >
+                  <FormControlLabel value="summary" control={<Radio />} label="All Members" />
+                  <FormControlLabel value="active" control={<Radio />} label="Active Members Only" />
+                  <FormControlLabel value="pending" control={<Radio />} label="Pending Members Only" />
+                  <FormControlLabel value="expired" control={<Radio />} label="Expired Members Only" />
+                  <FormControlLabel value="competitions" control={<Radio />} label="Competition Participants" />
+                  <FormControlLabel value="aaga" control={<Radio />} label="AaGA Challenge Participants" />
+                </RadioGroup>
+              </FormControl>
+            </Box>
+            
+            {exportFormat === 'csv' && (
+              <Box>
+                <FormControl component="fieldset">
+                  <FormLabel component="legend">Fields to Include</FormLabel>
+                  <FormGroup>
+                    <FormControlLabel
+                      control={<Checkbox checked={exportFields.personal} onChange={(e) => setExportFields({...exportFields, personal: e.target.checked})} />}
+                      label="Personal Information (Name, DOB)"
+                    />
+                    <FormControlLabel
+                      control={<Checkbox checked={exportFields.contact} onChange={(e) => setExportFields({...exportFields, contact: e.target.checked})} />}
+                      label="Contact Information (Email, Phone, Address)"
+                    />
+                    <FormControlLabel
+                      control={<Checkbox checked={exportFields.membership} onChange={(e) => setExportFields({...exportFields, membership: e.target.checked})} />}
+                      label="Membership Details (Status, Type, Expiry, Payment)"
+                    />
+                    <FormControlLabel
+                      control={<Checkbox checked={exportFields.preferences} onChange={(e) => setExportFields({...exportFields, preferences: e.target.checked})} />}
+                      label="Preferences (Competitions, AaGA, Photos)"
+                    />
+                    <FormControlLabel
+                      control={<Checkbox checked={exportFields.ea} onChange={(e) => setExportFields({...exportFields, ea: e.target.checked})} />}
+                      label="England Athletics Number"
+                    />
+                  </FormGroup>
+                </FormControl>
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenExportDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={handleExport} 
+              variant="contained" 
+              color="primary"
+              disabled={exportLoading}
+              startIcon={exportLoading ? <CircularProgress size={20} /> : <DownloadIcon />}
+            >
+              Export
             </Button>
           </DialogActions>
         </Dialog>

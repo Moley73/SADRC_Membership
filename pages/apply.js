@@ -74,6 +74,15 @@ export default function Apply() {
       const email = user.email;
       const memberData = { ...data };
       memberData.post_code = postCode;
+      
+      // Set default membership status to pending
+      memberData.membership_status = 'pending';
+      
+      // If EA number is provided, include it in the submission
+      if (memberData.ea_number) {
+        memberData.ea_number = memberData.ea_number.trim();
+      }
+      
       // 2. Upload signature if present AND not disabled
       let signature_url = null;
       if (signature && signature !== 'DISABLED') {
@@ -250,14 +259,45 @@ export default function Apply() {
                 )} />
               </Grid>
               {/* Membership Options */}
-              <Grid item xs={12}>
-                <Controller name="membership_type" control={control} defaultValue="club" render={({ field }) => (
-                  <TextField {...field} label="Membership Option" select fullWidth required>
-                    {membershipOptions.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-                    ))}
-                  </TextField>
-                )} />
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="membership_type"
+                  control={control}
+                  defaultValue="club"
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      select
+                      label="Membership Type"
+                      variant="outlined"
+                      fullWidth
+                      required
+                    >
+                      {membershipOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="ea_number"
+                  control={control}
+                  defaultValue=""
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="England Athletics URN (if known)"
+                      variant="outlined"
+                      fullWidth
+                      helperText="If you already have an England Athletics registration number"
+                    />
+                  )}
+                />
               </Grid>
               {/* Policy Acknowledgement */}
               <Grid item xs={12}>

@@ -3,6 +3,10 @@ import {
   Container, Typography, Box, Paper, Tabs, Tab, Button, Alert, CircularProgress, Divider,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Chip
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs from 'dayjs';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import AuthGuard from '../../components/AuthGuard';
@@ -72,22 +76,79 @@ function PhaseSettingsManager() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(null);
   const [edited, setEdited] = useState({});
+  const [token, setToken] = useState(null);
+
+  // Get authentication token with refresh attempt
+  const getToken = async (forceRefresh = false) => {
+    try {
+      // Try to refresh the session if requested
+      if (forceRefresh) {
+        const refreshedSession = await supabase.auth.refreshSession();
+        console.log('Session refresh attempt:', refreshedSession ? 'Success' : 'Failed');
+      }
+      
+      // Get the current session
+      const { data } = await supabase.auth.getSession();
+      
+      if (data?.session?.access_token) {
+        setToken(data.session.access_token);
+        console.log('Token retrieved for settings management');
+        return data.session.access_token;
+      } else {
+        console.log('No token available for settings management');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error retrieving token:', error);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    getToken();
+    
+    // Set up auth state change listener
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event);
+      if (session?.access_token) {
+        setToken(session.access_token);
+      } else if (event === 'SIGNED_OUT') {
+        setToken(null);
+      }
+    });
+    
+    // Clean up listener
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
 
   // Fetch existing settings to understand available fields
-  useEffect(() => {
+  const fetchSettings = useCallback(async () => {
     setLoading(true);
-    fetch('/api/awards/public-settings')
-      .then(res => res.json())
-      .then(data => {
-        setSettings(data);
-        console.log("Current settings:", data); // Log to see available fields
-        setLoading(false);
-      })
-      .catch(err => {
-        setError('Failed to load settings');
-        setLoading(false);
-      });
+    setError(null);
+    
+    try {
+      const res = await fetch('/api/awards/public-settings');
+      
+      if (!res.ok) {
+        throw new Error(`Failed to fetch settings: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      setSettings(data);
+      console.log("Current settings:", data);
+    } catch (err) {
+      console.error('Error fetching settings:', err);
+      setError('Failed to load settings');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
 
   const handleChange = (field, value) => {
     setEdited(prev => ({ ...prev, [field]: value }));
@@ -97,9 +158,19 @@ function PhaseSettingsManager() {
     setSaving(true);
     setError(null);
     setSuccess(null);
+    
     try {
       // Only include fields that exist in the original settings object
       const validFields = {};
+      
+      // Always include the settings ID
+      if (settings?.id) {
+        validFields.id = settings.id;
+      } else {
+        throw new Error('Settings ID is missing');
+      }
+      
+      // Add edited fields with proper formatting
       Object.keys(edited).forEach(key => {
         // Only include fields that exist in the original settings
         if (key in settings) {
@@ -118,26 +189,78 @@ function PhaseSettingsManager() {
         }
       });
 
-      // Get the current user's token for authentication
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      console.log('Submitting settings data:', JSON.stringify(validFields, null, 2));
 
-      if (!token) {
-        throw new Error('Authentication token not available');
+      // Get the current user's token for authentication with retry logic
+      let currentToken = token;
+      let retryCount = 0;
+      const maxRetries = 2;
+      
+      while (!currentToken && retryCount < maxRetries) {
+        console.log(`Token retry attempt ${retryCount + 1}/${maxRetries}`);
+        currentToken = await getToken(retryCount > 0); // Force refresh on retry
+        retryCount++;
+        
+        if (!currentToken && retryCount < maxRetries) {
+          // Wait a moment before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
+
+      if (!currentToken) {
+        throw new Error('Authentication token not available. Please try logging out and back in.');
+      }
+
+      console.log('Saving settings with token available');
 
       const response = await fetch('/api/awards/settings', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${currentToken}`
         },
+        credentials: 'include',
         body: JSON.stringify(validFields)
       });
 
+      // Handle specific error cases
+      if (response.status === 401) {
+        // Try to refresh token and retry once
+        const newToken = await getToken(true);
+        if (newToken) {
+          console.log('Retrying with refreshed token');
+          const retryResponse = await fetch('/api/awards/settings', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${newToken}`
+            },
+            credentials: 'include',
+            body: JSON.stringify(validFields)
+          });
+          
+          if (retryResponse.ok) {
+            const updatedSettings = await retryResponse.json();
+            setSettings(updatedSettings);
+            setSuccess('Settings updated successfully');
+            setEdited({});
+            setSaving(false);
+            return;
+          }
+        }
+        throw new Error('Your session has expired. Please log out and log back in.');
+      }
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update settings');
+        const errorText = await response.text();
+        let errorMessage;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || `Failed to update settings: ${response.status}`;
+        } catch (e) {
+          errorMessage = `Failed to update settings: ${response.status} - ${errorText.substring(0, 100)}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const updatedSettings = await response.json();
@@ -169,212 +292,239 @@ function PhaseSettingsManager() {
   }
 
   return (
-    <Box sx={{ mt: 3 }}>
-      <Paper 
-        elevation={2} 
-        sx={{ 
-          p: 4, 
-          borderRadius: 2,
-          backgroundColor: 'background.paper',
-          mb: 4
-        }}
-      >
-        <Typography variant="h5" component="h2" sx={{ mb: 3, fontWeight: 600, color: 'primary.main' }}>
-          Awards Configuration
-        </Typography>
-        
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
-        
-        {success && (
-          <Alert severity="success" sx={{ mb: 3 }}>
-            {success}
-          </Alert>
-        )}
-        
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
-          <Box sx={{ gridColumn: { xs: '1', md: '1 / 3' } }}>
-            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-              Current Phase
-            </Typography>
-            <Box 
-              sx={{ 
-                p: 2, 
-                borderRadius: 1, 
-                border: '1px solid', 
-                borderColor: 'divider',
-                backgroundColor: 'background.subtle',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2
-              }}
-            >
-              <Box sx={{ flexGrow: 1 }}>
-                <select
-                  value={edited.current_phase ?? settings?.current_phase ?? ''}
-                  onChange={(e) => handleChange('current_phase', e.target.value)}
-                  style={{ 
-                    width: '100%',
-                    padding: '10px 12px',
-                    fontSize: '16px',
-                    borderRadius: '8px',
-                    border: '1px solid #ccc',
-                    backgroundColor: '#fff',
-                    color: '#333'
-                  }}
-                >
-                  <option value="setup">Setup</option>
-                  <option value="nomination">Nomination</option>
-                  <option value="voting">Voting</option>
-                  <option value="closed">Closed</option>
-                </select>
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <Box sx={{ mt: 3 }}>
+        <Paper 
+          elevation={2} 
+          sx={{ 
+            p: 4, 
+            borderRadius: 2,
+            backgroundColor: 'background.paper',
+            mb: 4
+          }}
+        >
+          <Typography variant="h5" component="h2" sx={{ mb: 3, fontWeight: 600, color: 'primary.main' }}>
+            Awards Configuration
+          </Typography>
+          
+          {error && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              {error}
+            </Alert>
+          )}
+          
+          {success && (
+            <Alert severity="success" sx={{ mb: 3 }}>
+              {success}
+            </Alert>
+          )}
+          
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
+            <Box sx={{ gridColumn: { xs: '1', md: '1 / 3' } }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                Current Phase
+              </Typography>
+              <Box 
+                sx={{ 
+                  p: 2, 
+                  borderRadius: 1, 
+                  border: '1px solid', 
+                  borderColor: 'divider',
+                  backgroundColor: 'background.subtle',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2
+                }}
+              >
+                <Box sx={{ flexGrow: 1 }}>
+                  <select
+                    value={edited.current_phase ?? settings?.current_phase ?? ''}
+                    onChange={(e) => handleChange('current_phase', e.target.value)}
+                    style={{ 
+                      width: '100%',
+                      padding: '10px 12px',
+                      fontSize: '16px',
+                      borderRadius: '8px',
+                      border: '1px solid #ccc',
+                      backgroundColor: '#fff',
+                      color: '#333'
+                    }}
+                  >
+                    <option value="setup">Setup</option>
+                    <option value="nomination">Nomination</option>
+                    <option value="voting">Voting</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </Box>
+                <Box sx={{ 
+                  backgroundColor: 'primary.main', 
+                  color: 'white', 
+                  py: 0.5, 
+                  px: 2, 
+                  borderRadius: 4,
+                  fontWeight: 'bold',
+                  fontSize: '0.875rem'
+                }}>
+                  {edited.current_phase ?? settings?.current_phase ?? 'Not Set'}
+                </Box>
               </Box>
-              <Box sx={{ 
-                backgroundColor: 'primary.main', 
-                color: 'white', 
-                py: 0.5, 
-                px: 2, 
-                borderRadius: 4,
-                fontWeight: 'bold',
-                fontSize: '0.875rem'
-              }}>
-                {edited.current_phase ?? settings?.current_phase ?? 'Not Set'}
-              </Box>
+            </Box>
+            
+            <Box>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                Active Year
+              </Typography>
+              <TextField
+                fullWidth
+                type="number"
+                value={edited.active_year ?? settings?.active_year ?? new Date().getFullYear()}
+                onChange={(e) => handleChange('active_year', e.target.value)}
+                InputProps={{
+                  sx: { borderRadius: 2 }
+                }}
+              />
+            </Box>
+            
+            <Box sx={{ gridColumn: { xs: '1', md: '1 / 3' } }}>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, color: 'primary.main' }}>
+                Nomination Period
+              </Typography>
+            </Box>
+            
+            <Box>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                Nomination Start Date
+              </Typography>
+              <DatePicker
+                value={edited.nomination_start_date ? 
+                  dayjs(edited.nomination_start_date) : 
+                  (settings?.nomination_start_date ? dayjs(settings.nomination_start_date) : null)}
+                onChange={(newDate) => {
+                  if (newDate) {
+                    // Format as YYYY-MM-DD for consistency with the existing code
+                    const formattedDate = newDate.format('YYYY-MM-DD');
+                    handleChange('nomination_start_date', formattedDate);
+                  }
+                }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    InputProps: {
+                      sx: { borderRadius: 2 }
+                    }
+                  }
+                }}
+              />
+            </Box>
+            
+            <Box>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                Nomination End Date
+              </Typography>
+              <DatePicker
+                value={edited.nomination_end_date ? 
+                  dayjs(edited.nomination_end_date) : 
+                  (settings?.nomination_end_date ? dayjs(settings.nomination_end_date) : null)}
+                onChange={(newDate) => {
+                  if (newDate) {
+                    // Format as YYYY-MM-DD for consistency with the existing code
+                    const formattedDate = newDate.format('YYYY-MM-DD');
+                    handleChange('nomination_end_date', formattedDate);
+                  }
+                }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    InputProps: {
+                      sx: { borderRadius: 2 }
+                    }
+                  }
+                }}
+              />
+            </Box>
+            
+            <Box sx={{ gridColumn: { xs: '1', md: '1 / 3' } }}>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, color: 'primary.main' }}>
+                Voting Period
+              </Typography>
+            </Box>
+            
+            <Box>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                Voting Start Date
+              </Typography>
+              <DatePicker
+                value={edited.voting_start_date ? 
+                  dayjs(edited.voting_start_date) : 
+                  (settings?.voting_start_date ? dayjs(settings.voting_start_date) : null)}
+                onChange={(newDate) => {
+                  if (newDate) {
+                    // Format as YYYY-MM-DD for consistency with the existing code
+                    const formattedDate = newDate.format('YYYY-MM-DD');
+                    handleChange('voting_start_date', formattedDate);
+                  }
+                }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    InputProps: {
+                      sx: { borderRadius: 2 }
+                    }
+                  }
+                }}
+              />
+            </Box>
+            
+            <Box>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                Voting End Date
+              </Typography>
+              <DatePicker
+                value={edited.voting_end_date ? 
+                  dayjs(edited.voting_end_date) : 
+                  (settings?.voting_end_date ? dayjs(settings.voting_end_date) : null)}
+                onChange={(newDate) => {
+                  if (newDate) {
+                    // Format as YYYY-MM-DD for consistency with the existing code
+                    const formattedDate = newDate.format('YYYY-MM-DD');
+                    handleChange('voting_end_date', formattedDate);
+                  }
+                }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    InputProps: {
+                      sx: { borderRadius: 2 }
+                    }
+                  }
+                }}
+              />
             </Box>
           </Box>
           
-          <Box>
-            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-              Active Year
-            </Typography>
-            <TextField
-              fullWidth
-              type="number"
-              value={edited.active_year ?? settings?.active_year ?? new Date().getFullYear()}
-              onChange={(e) => handleChange('active_year', e.target.value)}
-              InputProps={{
-                sx: { borderRadius: 2 }
-              }}
-            />
+          <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={handleSave}
+              disabled={saving || Object.keys(edited).length === 0}
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
           </Box>
-          
-          <Box sx={{ gridColumn: { xs: '1', md: '1 / 3' } }}>
-            <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, color: 'primary.main' }}>
-              Nomination Period
-            </Typography>
-          </Box>
-          
-          <Box>
-            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-              Nomination Start Date
-            </Typography>
-            <TextField
-              fullWidth
-              type="date"
-              value={edited.nomination_start_date ?? 
-                (settings?.nomination_start_date ? 
-                  new Date(settings.nomination_start_date).toISOString().split('T')[0] : 
-                  '')}
-              onChange={(e) => handleChange('nomination_start_date', e.target.value)}
-              InputProps={{
-                sx: { borderRadius: 2 }
-              }}
-            />
-          </Box>
-          
-          <Box>
-            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-              Nomination End Date
-            </Typography>
-            <TextField
-              fullWidth
-              type="date"
-              value={edited.nomination_end_date ?? 
-                (settings?.nomination_end_date ? 
-                  new Date(settings.nomination_end_date).toISOString().split('T')[0] : 
-                  '')}
-              onChange={(e) => handleChange('nomination_end_date', e.target.value)}
-              InputProps={{
-                sx: { borderRadius: 2 }
-              }}
-            />
-          </Box>
-          
-          <Box sx={{ gridColumn: { xs: '1', md: '1 / 3' } }}>
-            <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, color: 'primary.main' }}>
-              Voting Period
-            </Typography>
-          </Box>
-          
-          <Box>
-            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-              Voting Start Date
-            </Typography>
-            <TextField
-              fullWidth
-              type="date"
-              value={edited.voting_start_date ?? 
-                (settings?.voting_start_date ? 
-                  new Date(settings.voting_start_date).toISOString().split('T')[0] : 
-                  '')}
-              onChange={(e) => handleChange('voting_start_date', e.target.value)}
-              InputProps={{
-                sx: { borderRadius: 2 }
-              }}
-            />
-          </Box>
-          
-          <Box>
-            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-              Voting End Date
-            </Typography>
-            <TextField
-              fullWidth
-              type="date"
-              value={edited.voting_end_date ?? 
-                (settings?.voting_end_date ? 
-                  new Date(settings.voting_end_date).toISOString().split('T')[0] : 
-                  '')}
-              onChange={(e) => handleChange('voting_end_date', e.target.value)}
-              InputProps={{
-                sx: { borderRadius: 2 }
-              }}
-            />
-          </Box>
-        </Box>
+        </Paper>
         
-        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleSave}
-            disabled={saving || Object.keys(edited).length === 0}
-            sx={{ 
-              minWidth: 150,
-              py: 1.5,
-              boxShadow: 2,
-              '&:hover': {
-                boxShadow: 4
-              }
-            }}
-          >
-            {saving ? <CircularProgress size={24} /> : 'Save Changes'}
-          </Button>
+        <Box sx={{ mb: 4 }}>
+          <Alert severity="info">
+            <Typography variant="body2">
+              <strong>Note:</strong> Changes to the phase settings will affect what members can see and do in the Awards section. Make sure to set appropriate dates for each phase.
+            </Typography>
+          </Alert>
         </Box>
-      </Paper>
-      
-      <Box sx={{ mt: 3, p: 3, backgroundColor: 'background.subtle', borderRadius: 2 }}>
-        <Typography variant="subtitle2" color="text.secondary">
-          <strong>Note:</strong> Changes to the phase settings will affect what members can see and do in the Awards section. 
-          Make sure to set appropriate dates for each phase.
-        </Typography>
       </Box>
-    </Box>
+    </LocalizationProvider>
   );
 }
 

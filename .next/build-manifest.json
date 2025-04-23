@@ -32,15 +32,15 @@
       "static/chunks/main.js",
       "static/chunks/pages/admin.js"
     ],
-    "/manage": [
+    "/login": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/manage.js"
+      "static/chunks/pages/login.js"
     ],
-    "/resources": [
+    "/xmas-party": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/resources.js"
+      "static/chunks/pages/xmas-party.js"
     ]
   },
   "ampFirstPages": []

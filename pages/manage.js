@@ -378,7 +378,7 @@ export default function ManagePage() {
   };
 
   return (
-    <AuthGuard superAdminOnly={true}>
+    <AuthGuard requiredRole="super_admin">
       <Head>
         <title>Manage Administrators | SADRC Membership</title>
         <meta name="description" content="Manage administrator access for SADRC membership system" />
