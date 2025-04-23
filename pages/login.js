@@ -54,9 +54,24 @@ export default function Login() {
           // Store the token in localStorage for explicit use in API calls
           localStorage.setItem('supabase-auth-token', data.session.access_token);
           
+          // Force a session refresh to ensure it's properly stored
+          await refreshSession();
+          
           // Redirect to returnUrl if provided, otherwise to home
           const redirectTo = returnUrl || '/';
-          window.location.href = redirectTo; // Use window.location for full page reload
+          
+          // Use router.push first, but if that doesn't trigger a navigation,
+          // fall back to window.location for a full page reload
+          router.push(redirectTo).then(() => {
+            // Set a small timeout to allow the router to complete
+            setTimeout(() => {
+              // If we're still on the login page after the router.push, force a reload
+              if (window.location.pathname.includes('/login')) {
+                console.log('Forcing page reload for navigation');
+                window.location.href = redirectTo;
+              }
+            }, 300);
+          });
         } else {
           setError('Login failed. Please try again.');
         }
@@ -83,6 +98,9 @@ export default function Login() {
             // Store the token for API calls
             if (data.session) {
               localStorage.setItem('supabase-auth-token', data.session.access_token);
+              
+              // Force a session refresh to ensure it's properly stored
+              await refreshSession();
             }
             
             // Redirect to the application form to complete registration

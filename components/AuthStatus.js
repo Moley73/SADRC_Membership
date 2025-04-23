@@ -50,6 +50,8 @@ export default function AuthStatus() {
 
   useEffect(() => {
     let mounted = true;
+    let retryCount = 0;
+    const maxRetries = 3;
     
     // Initial user check
     const getUser = async () => {
@@ -63,6 +65,13 @@ export default function AuthStatus() {
         if (error) {
           console.error('Error getting session:', error);
           if (mounted) {
+            // If we're in a production environment and have retries left, try again
+            if (process.env.NODE_ENV === 'production' && retryCount < maxRetries) {
+              retryCount++;
+              console.log(`Retrying session check (${retryCount}/${maxRetries})...`);
+              setTimeout(getUser, 1000); // Wait 1 second before retrying
+              return;
+            }
             setUser(null);
             setLoading(false);
           }
@@ -73,6 +82,31 @@ export default function AuthStatus() {
         
         if (!data?.session?.user) {
           console.log('No active session found');
+          // Check localStorage directly as a fallback
+          if (typeof window !== 'undefined') {
+            const storedSession = localStorage.getItem('sadrc-membership-auth');
+            if (storedSession) {
+              try {
+                const parsedSession = JSON.parse(storedSession);
+                if (parsedSession?.user) {
+                  console.log('Found session in localStorage, attempting to recover');
+                  // Try to refresh the session
+                  const { data: refreshData } = await supabase.auth.refreshSession();
+                  if (refreshData?.session?.user) {
+                    console.log('Session recovered successfully');
+                    setUser(refreshData.session.user);
+                    setUserInitials(generateInitials(refreshData.session.user.email));
+                    setLoading(false);
+                    setMembershipChecked(true);
+                    return;
+                  }
+                }
+              } catch (e) {
+                console.error('Error parsing stored session:', e);
+              }
+            }
+          }
+          
           if (mounted) {
             setUser(null);
             setLoading(false);
