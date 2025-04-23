@@ -6,7 +6,7 @@ import {
 import Link from 'next/link';
 import UpdateButton from '../components/UpdateButton';
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, debugAuthState, testTableAccess } from '../lib/supabaseClient';
 import DirectionsRunIcon from '@mui/icons-material/DirectionsRun';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -22,6 +22,8 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [timeoutReached, setTimeoutReached] = useState(false);
   const [memberDetails, setMemberDetails] = useState(null);
+  const [debugMode, setDebugMode] = useState(false);
+  const [diagnosticInfo, setDiagnosticInfo] = useState(null);
   const theme = useTheme();
   const router = useRouter();
 
@@ -52,11 +54,11 @@ export default function Home() {
     timeoutId = setTimeout(() => {
       didTimeout = true;
       setTimeoutReached(true);
-      
       // Even if the auth check timed out, check if avatar is visible
       if (checkAvatarInDOM()) {
         setIsAuthenticated(true);
         setError(null);
+        finishLoading(); // Ensure loading always ends
       } else {
         setLoading(false);
         setError('Membership check is taking longer than expected. Please try again later.');
@@ -151,16 +153,14 @@ export default function Home() {
           if (checkAvatarInDOM()) {
             setIsAuthenticated(true);
             setError(null);
-            
+            finishLoading();
             // Retry membership check
             checkDatabase();
             return;
           }
           
-          setIsAuthenticated(false);
-          setDebugInfo({ error: e.message });
-          setError('Login check timed out.');
-          finishLoading();
+          setError('Authentication check timed out or failed. Please try logging in again.');
+          setLoading(false);
           return;
         }
 
@@ -327,6 +327,59 @@ export default function Home() {
         return 'Second Claim';
       default:
         return type;
+    }
+  };
+
+  const runDiagnostics = async () => {
+    setDiagnosticInfo({ status: 'running' });
+    try {
+      // Get auth state
+      const authState = await debugAuthState();
+      
+      // Only proceed with table tests if we have a user
+      let tableTests = {};
+      if (authState.hasUser && authState.userEmail) {
+        // Test critical tables
+        const memberTest = await testTableAccess('members', authState.userEmail);
+        const adminTest = await testTableAccess('admin_list', authState.userEmail);
+        const userRolesTest = await testTableAccess('user_roles', authState.userEmail);
+        
+        tableTests = {
+          members: memberTest,
+          admin_list: adminTest,
+          user_roles: userRolesTest
+        };
+      }
+      
+      // Gather all diagnostics
+      const info = {
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+        authState,
+        tableAccess: tableTests,
+        browserInfo: {
+          userAgent: navigator.userAgent,
+          language: navigator.language,
+          cookiesEnabled: navigator.cookieEnabled
+        }
+      };
+      
+      setDiagnosticInfo(info);
+      console.log('Diagnostic results:', info);
+      
+      // If there are obvious issues, set an error message
+      if (!authState.hasUser) {
+        setError('Authentication issue: No user found in session');
+      } else if (tableTests.members && !tableTests.members.success) {
+        setError(`Members table access issue: ${tableTests.members.error?.message || 'Unknown error'}`);
+      }
+      
+    } catch (err) {
+      console.error('Error running diagnostics:', err);
+      setDiagnosticInfo({
+        status: 'error',
+        error: err.message
+      });
     }
   };
 
@@ -603,6 +656,51 @@ export default function Home() {
                 <Typography variant="h5" component="h2" gutterBottom>
                   Please log in to access membership features.
                 </Typography>
+              </Box>
+            )}
+            
+            {/* Debug panel */}
+            {isAuthenticated && !hasMembership && (
+              <Box mt={4} textAlign="center">
+                <Button 
+                  variant="outlined" 
+                  color="secondary" 
+                  size="small"
+                  onClick={() => setDebugMode(!debugMode)}
+                  sx={{ mb: 2 }}
+                >
+                  {debugMode ? 'Hide' : 'Show'} Diagnostics
+                </Button>
+                
+                {debugMode && (
+                  <Box mt={2} p={2} border={1} borderColor="grey.300" borderRadius={1}>
+                    <Typography variant="h6">Diagnostics</Typography>
+                    <Button 
+                      variant="contained" 
+                      color="primary" 
+                      size="small" 
+                      onClick={runDiagnostics}
+                      sx={{ my: 1 }}
+                    >
+                      Run Diagnostics
+                    </Button>
+                    
+                    {diagnosticInfo && (
+                      <Box mt={2} textAlign="left" 
+                        sx={{ 
+                          maxHeight: '300px', 
+                          overflow: 'auto',
+                          p: 1,
+                          bgcolor: 'grey.100',
+                          fontSize: '0.75rem',
+                          fontFamily: 'monospace'
+                        }}
+                      >
+                        <pre>{JSON.stringify(diagnosticInfo, null, 2)}</pre>
+                      </Box>
+                    )}
+                  </Box>
+                )}
               </Box>
             )}
           </>

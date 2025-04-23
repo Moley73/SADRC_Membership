@@ -2,7 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/": "pages/index.js",
-  "/admin": "pages/admin.js",
-  "/login": "pages/login.js"
+  "/awards": "pages/awards.js",
+  "/api/awards/public-settings": "pages/api/awards/public-settings.js",
+  "/awards/manage": "pages/awards/manage.js",
+  "/xmas-party": "pages/xmas-party.js"
 }
