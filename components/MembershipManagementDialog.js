@@ -19,6 +19,7 @@ export default function MembershipManagementDialog({
   const [success, setSuccess] = useState(null);
   const [formData, setFormData] = useState({
     membership_status: member?.membership_status || 'active',
+    payment_status: member?.payment_status || 'unpaid',
     ea_number: member?.ea_number || '',
     membership_expiry: member?.membership_expiry || dayjs().add(1, 'year').format('YYYY-MM-DD')
   });
@@ -28,6 +29,7 @@ export default function MembershipManagementDialog({
     if (member) {
       setFormData({
         membership_status: member.membership_status || 'active',
+        payment_status: member.payment_status || 'unpaid',
         ea_number: member.ea_number || '',
         membership_expiry: member.membership_expiry || dayjs().add(1, 'year').format('YYYY-MM-DD')
       });
@@ -58,6 +60,16 @@ export default function MembershipManagementDialog({
         try {
           // Ensure date is in YYYY-MM-DD format
           formattedData.membership_expiry = dayjs(formData.membership_expiry).format('YYYY-MM-DD');
+          
+          // If expiry date is in the past, automatically set status to expired and payment to unpaid
+          const today = dayjs();
+          const expiryDate = dayjs(formData.membership_expiry);
+          
+          if (expiryDate.isBefore(today) && formData.membership_status !== 'expired') {
+            formattedData.membership_status = 'expired';
+            formattedData.payment_status = 'unpaid';
+            console.log('Membership has expired, automatically updating status');
+          }
         } catch (err) {
           throw new Error('Invalid expiry date format');
         }
@@ -128,6 +140,22 @@ export default function MembershipManagementDialog({
                   <MenuItem value="pending">Pending</MenuItem>
                   <MenuItem value="expired">Expired</MenuItem>
                   <MenuItem value="suspended">Suspended</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel id="payment-status-label">Payment Status</InputLabel>
+                <Select
+                  labelId="payment-status-label"
+                  value={formData.payment_status || 'unpaid'}
+                  label="Payment Status"
+                  onChange={(e) => handleChange('payment_status', e.target.value)}
+                >
+                  <MenuItem value="paid">Paid</MenuItem>
+                  <MenuItem value="unpaid">Unpaid</MenuItem>
+                  <MenuItem value="pending">Pending</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

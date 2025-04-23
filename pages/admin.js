@@ -623,9 +623,9 @@ export default function AdminPage() {
               <TableRow>
                 <TableCell>Name</TableCell>
                 <TableCell>Email</TableCell>
-                <TableCell>Application Status</TableCell>
+                <TableCell>Status</TableCell>
                 <TableCell>Membership Status</TableCell>
-                <TableCell>EA Number</TableCell>
+                <TableCell>Expiry</TableCell>
                 <TableCell>Payment</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
@@ -650,46 +650,55 @@ export default function AdminPage() {
                       <Typography variant="body2">
                         {member.first_name} {member.surname}
                       </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{member.email}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={member.status || 'pending'} 
-                        color={STATUS_COLORS[member.status] || 'default'}
-                        size="small"
-                      />
                       {member.pending_update && (
                         <Chip 
-                          label="Update Pending" 
-                          color="info"
-                          size="small"
+                          size="small" 
+                          label="Updates Pending" 
+                          color="warning" 
                           sx={{ ml: 1 }}
                         />
                       )}
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={member.membership_status || 'pending'} 
+                      <Typography variant="body2">{member.email}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={member.status || 'pending'}
+                        color={STATUS_COLORS[member.status] || 'default'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={member.membership_status || 'pending'}
                         color={
                           member.membership_status === 'active' ? 'success' :
-                          member.membership_status === 'pending' ? 'warning' :
-                          member.membership_status === 'expired' ? 'error' : 'default'
+                          member.membership_status === 'expired' ? 'error' :
+                          member.membership_status === 'suspended' ? 'error' :
+                          'warning'
                         }
                         size="small"
                       />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2">
-                        {member.ea_number || 'Not registered'}
-                      </Typography>
+                      {member.membership_expiry ? new Date(member.membership_expiry).toLocaleDateString() : 'Not set'}
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={member.payment_status === 'paid' ? 'Paid' : 'Unpaid'} 
-                        color={member.payment_status === 'paid' ? 'success' : 'default'}
+                      <Chip
+                        label={member.payment_status || 'unpaid'}
+                        color={
+                          member.payment_status === 'paid' ? 'success' :
+                          member.payment_status === 'pending' ? 'warning' :
+                          'error'
+                        }
                         size="small"
+                        onClick={() => {
+                          // Toggle between paid and unpaid
+                          const newStatus = member.payment_status === 'paid' ? 'unpaid' : 'paid';
+                          handlePaymentStatus(member.id, newStatus);
+                        }}
+                        sx={{ cursor: 'pointer' }}
                       />
                     </TableCell>
                     <TableCell>
