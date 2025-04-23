@@ -4,8 +4,8 @@ import { supabase, safeGetSession } from '../lib/supabaseClient';
 import { 
   Container, Typography, Box, Alert, CircularProgress, 
   Table, TableHead, TableRow, TableCell, TableBody, Paper, 
-  Button, Tabs, Tab, TextField, Dialog, DialogTitle, 
-  DialogContent, DialogActions, Chip, Grid,
+  Button, Tabs, Tab, TextField, Dialog, DialogTitle, DialogContent, DialogContentText,
+  DialogActions, Chip, Grid,
   Card, CardContent, CardActions, Divider, Menu, MenuItem,
   IconButton, Tooltip, FormControl, FormLabel, RadioGroup,
   FormControlLabel, Radio, Checkbox, FormGroup
@@ -17,6 +17,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { exportMembersToPDF } from '../lib/pdfExportHelper';
 import MemberUpdateDialog from '../components/MemberUpdateDialog';
 import MembershipManagementDialog from '../components/MembershipManagementDialog';
@@ -74,6 +75,8 @@ export default function AdminPage() {
     ea: true
   });
   const [exportLoading, setExportLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -595,6 +598,39 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeleteClick = (member) => {
+    setMemberToDelete(member);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!memberToDelete) return;
+    try {
+      setActionLoading((prev) => ({ ...prev, [memberToDelete.id]: true }));
+      const { error } = await supabase
+        .from('members')
+        .delete()
+        .eq('id', memberToDelete.id);
+      if (error) {
+        setError('Failed to delete member: ' + error.message);
+      } else {
+        setMembers((prev) => prev.filter((m) => m.id !== memberToDelete.id));
+        setFilteredMembers((prev) => prev.filter((m) => m.id !== memberToDelete.id));
+      }
+    } catch (err) {
+      setError('Unexpected error during delete: ' + err.message);
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [memberToDelete.id]: false }));
+      setDeleteDialogOpen(false);
+      setMemberToDelete(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setMemberToDelete(null);
+  };
+
   return (
     <AuthGuard requiredRole="admin">
       <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
@@ -801,6 +837,15 @@ export default function AdminPage() {
                             color="primary"
                           >
                             <ManageAccountsIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete Member">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDeleteClick(member)}
+                            color="error"
+                          >
+                            <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                       </Box>
@@ -1091,6 +1136,20 @@ export default function AdminPage() {
             >
               Export
             </Button>
+          </DialogActions>
+        </Dialog>
+        
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onClose={handleDeleteCancel}>
+          <DialogTitle>Confirm Delete</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Are you sure you want to delete member {memberToDelete?.first_name} {memberToDelete?.surname} ({memberToDelete?.email})? This action cannot be undone.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleDeleteCancel} color="primary">Cancel</Button>
+            <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={actionLoading[memberToDelete?.id]}>Delete</Button>
           </DialogActions>
         </Dialog>
       </Container>
