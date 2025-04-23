@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, safeGetSession, handleAuthError } from '../lib/supabaseClient';
 import AuthGuard from '../components/AuthGuard';
 
 function ProfilePage() {
@@ -61,25 +61,17 @@ function ProfilePage() {
         }
         
         // Fall back to Supabase auth check
-        const { data, error } = await supabase.auth.getSession();
+        const { session, user } = await safeGetSession();
         
-        if (error) {
-          console.error('Auth check error:', error);
+        if (!session || !user) {
           setIsAuthenticated(false);
           setAuthChecked(true);
-          setError('Authentication check timed out. Please try refreshing the page.');
-          return;
-        }
-        
-        if (data?.session?.user) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
           setError('Please log in to view your profile.');
           router.push('/login?returnUrl=/profile');
+        } else {
+          setIsAuthenticated(true);
+          setAuthChecked(true);
         }
-        
-        setAuthChecked(true);
       } catch (err) {
         console.error('Unexpected auth error:', err);
         setIsAuthenticated(false);
@@ -123,11 +115,11 @@ function ProfilePage() {
     try {
       setLoading(true);
       
-      // Get the current session and access token
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
+      // Get the current session and access token safely
+      const { session, user: sessionUser } = await safeGetSession();
+      const token = session?.access_token;
       
-      if (sessionError || !sessionData?.session?.user) {
+      if (!session || !sessionUser) {
         // Try to get user email from DOM if session check fails
         const userEmail = document.querySelector('.MuiAvatar-root')?.getAttribute('data-email');
         
@@ -177,11 +169,10 @@ function ProfilePage() {
         return;
       }
       
-      const currentUser = sessionData.session.user;
-      setUser(currentUser);
+      setUser(sessionUser);
       
       // Generate initials from email
-      const email = currentUser.email;
+      const email = sessionUser.email;
       const name = email.split('@')[0].replace(/[._-]/g, ' ');
       if (name.includes(' ')) {
         const nameParts = name.split(' ');
@@ -206,17 +197,17 @@ function ProfilePage() {
         }
         
         const memberData = await res.json();
-        handleMemberData(currentUser.email, memberData, null);
+        handleMemberData(sessionUser.email, memberData, null);
       } catch (apiError) {
         console.error('Error fetching profile via API:', apiError);
         // Fallback to direct Supabase query
         const { data: memberData, error: memberError } = await supabase
           .from('members')
           .select('*')
-          .eq('email', currentUser.email)
+          .eq('email', sessionUser.email)
           .single();
           
-        handleMemberData(currentUser.email, memberData, memberError);
+        handleMemberData(sessionUser.email, memberData, memberError);
       }
     } catch (err) {
       console.error('Error loading profile:', err);
@@ -274,8 +265,8 @@ function ProfilePage() {
       setSuccess(null);
       
       // Get current token for authentication
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
+      const { session } = await safeGetSession();
+      const token = session?.access_token;
       
       if (!token) {
         throw new Error('Authentication error - please try logging out and back in');

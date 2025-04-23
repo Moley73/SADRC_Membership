@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { supabase, isLoggedIn, refreshSession, isAdmin } from '../lib/supabaseClient';
+import { supabase, isLoggedIn, refreshSession, isAdmin, safeGetSession } from '../lib/supabaseClient';
 import { Box, CircularProgress, Typography, Alert, Button } from '@mui/material';
 
 export default function AuthGuard({ children, requiredRole = null }) {
@@ -81,13 +81,10 @@ export default function AuthGuard({ children, requiredRole = null }) {
           return;
         }
         
-        // Fall back to standard auth check
-        const loggedIn = await isLoggedIn();
+        // Fall back to safe session check
+        const { session, user } = await safeGetSession();
         
-        // If component unmounted during async operation, don't update state
-        if (!isMounted) return;
-        
-        if (!loggedIn) {
+        if (!session || !user) {
           // If not logged in but we haven't tried refreshing the session yet
           if (!sessionRefreshAttempted) {
             console.log('Attempting to refresh session...');
@@ -184,7 +181,7 @@ export default function AuthGuard({ children, requiredRole = null }) {
     const checkRole = async () => {
       try {
         // Get user session
-        const { data } = await supabase.auth.getSession();
+        const { data } = await safeGetSession();
         const user = data?.session?.user;
         
         if (!user) {

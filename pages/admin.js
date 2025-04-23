@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, safeGetSession } from '../lib/supabaseClient';
 import { 
   Container, Typography, Box, Alert, CircularProgress, 
   Table, TableHead, TableRow, TableCell, TableBody, Paper, 
@@ -93,8 +93,8 @@ export default function AdminPage() {
   const fetchMembers = async () => {
     try {
       setLoading(true);
-      // Get the current session and access token
-      const { data: { session } } = await supabase.auth.getSession();
+      // Get the current session and access token safely
+      const { session } = await safeGetSession();
       const token = session?.access_token;
 
       if (!token) {
