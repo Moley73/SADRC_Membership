@@ -52,6 +52,7 @@ export default function AuthStatus() {
     let mounted = true;
     let retryCount = 0;
     const maxRetries = 3;
+    let authCheckTimeout = null;
     
     // Initial user check
     const getUser = async () => {
@@ -139,6 +140,15 @@ export default function AuthStatus() {
     
     getUser();
     
+    // Add a safety timeout to prevent infinite loading
+    authCheckTimeout = setTimeout(() => {
+      if (mounted && loading && !membershipChecked) {
+        console.log('Auth check timed out, showing default state');
+        setLoading(false);
+        setMembershipChecked(true);
+      }
+    }, 5000); // 5 second timeout
+    
     // Set up auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
@@ -164,6 +174,9 @@ export default function AuthStatus() {
       mounted = false;
       if (authListener?.subscription) {
         authListener.subscription.unsubscribe();
+      }
+      if (authCheckTimeout) {
+        clearTimeout(authCheckTimeout);
       }
     };
   }, [generateInitials]);

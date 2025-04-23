@@ -123,6 +123,7 @@ export default function Login() {
   // Check if user is already logged in
   useEffect(() => {
     let isMounted = true;
+    let checkTimeout = null;
     
     const checkSession = async () => {
       try {
@@ -140,10 +141,10 @@ export default function Login() {
             return;
           }
           
-          // If not logged in but we haven't tried refreshing the session yet
+          // If not logged in, try to refresh the session
           if (!sessionRefreshAttempted) {
-            console.log('Attempting to refresh session...');
             setSessionRefreshAttempted(true);
+            console.log('Attempting to refresh session...');
             const session = await refreshSession();
             
             if (session && isMounted) {
@@ -167,8 +168,17 @@ export default function Login() {
     
     checkSession();
     
+    // Add a safety timeout to prevent infinite loading
+    checkTimeout = setTimeout(() => {
+      if (isMounted && checkingSession) {
+        console.log('Session check timed out, showing login form');
+        setCheckingSession(false);
+      }
+    }, 5000); // 5 second timeout
+    
     return () => {
       isMounted = false;
+      if (checkTimeout) clearTimeout(checkTimeout);
     };
   }, [router, returnUrl, sessionRefreshAttempted]);
 
