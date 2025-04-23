@@ -123,8 +123,9 @@ function ProfilePage() {
     try {
       setLoading(true);
       
-      // Get the current session
+      // Get the current session and access token
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
       
       if (sessionError || !sessionData?.session?.user) {
         // Try to get user email from DOM if session check fails
@@ -138,25 +139,41 @@ function ProfilePage() {
         setUser({ email: userEmail });
         
         // Generate initials from email
-        const name = userEmail.split('@')[0];
-        const parts = name.split(/[._-]/);
-        
-        if (parts.length > 1) {
-          setUserInitials(`${parts[0][0]}${parts[parts.length-1][0]}`.toUpperCase());
+        const name = userEmail.split('@')[0].replace(/[._-]/g, ' ');
+        if (name.includes(' ')) {
+          const nameParts = name.split(' ');
+          setUserInitials(`${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase());
         } else if (name.length > 1) {
           setUserInitials(name.substring(0, 2).toUpperCase());
         } else {
           setUserInitials(name[0].toUpperCase());
         }
         
-        // Fetch member profile data using email
-        const { data: memberData, error: memberError } = await supabase
-          .from('members')
-          .select('*')
-          .eq('email', userEmail)
-          .single();
+        // Fetch member profile data using API with email
+        try {
+          const res = await fetch(`/api/profile?email=${encodeURIComponent(userEmail)}`, {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
           
-        handleMemberData(userEmail, memberData, memberError);
+          if (!res.ok) {
+            throw new Error('Failed to fetch profile data');
+          }
+          
+          const memberData = await res.json();
+          handleMemberData(userEmail, memberData, null);
+        } catch (apiError) {
+          console.error('Error fetching profile via API:', apiError);
+          // Fallback to direct Supabase query
+          const { data: memberData, error: memberError } = await supabase
+            .from('members')
+            .select('*')
+            .eq('email', userEmail)
+            .single();
+            
+          handleMemberData(userEmail, memberData, memberError);
+        }
         return;
       }
       
@@ -165,25 +182,42 @@ function ProfilePage() {
       
       // Generate initials from email
       const email = currentUser.email;
-      const name = email.split('@')[0];
-      const parts = name.split(/[._-]/);
-      
-      if (parts.length > 1) {
-        setUserInitials(`${parts[0][0]}${parts[parts.length-1][0]}`.toUpperCase());
+      const name = email.split('@')[0].replace(/[._-]/g, ' ');
+      if (name.includes(' ')) {
+        const nameParts = name.split(' ');
+        setUserInitials(`${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase());
       } else if (name.length > 1) {
         setUserInitials(name.substring(0, 2).toUpperCase());
       } else {
         setUserInitials(name[0].toUpperCase());
       }
       
-      // Fetch member profile data
-      const { data: memberData, error: memberError } = await supabase
-        .from('members')
-        .select('*')
-        .eq('email', currentUser.email)
-        .single();
+      // Fetch member profile data using API with token
+      try {
+        const res = await fetch('/api/profile', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
         
-      handleMemberData(currentUser.email, memberData, memberError);
+        if (!res.ok) {
+          throw new Error('Failed to fetch profile data');
+        }
+        
+        const memberData = await res.json();
+        handleMemberData(currentUser.email, memberData, null);
+      } catch (apiError) {
+        console.error('Error fetching profile via API:', apiError);
+        // Fallback to direct Supabase query
+        const { data: memberData, error: memberError } = await supabase
+          .from('members')
+          .select('*')
+          .eq('email', currentUser.email)
+          .single();
+          
+        handleMemberData(currentUser.email, memberData, memberError);
+      }
     } catch (err) {
       console.error('Error loading profile:', err);
       setError(err.message);
@@ -247,56 +281,30 @@ function ProfilePage() {
         throw new Error('Authentication error - please try logging out and back in');
       }
       
-      // Check if member record exists
-      const { data: existingMember, error: checkError } = await supabase
-        .from('members')
-        .select('id')
-        .eq('email', profileData.email)
-        .maybeSingle();
-        
-      if (checkError) {
-        console.error('Error checking existing member:', checkError);
-        throw new Error('Failed to check existing profile');
+      // Use the API to update profile
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          first_name: profileData.first_name,
+          surname: profileData.surname,
+          phone: profileData.phone,
+          address: profileData.address,
+          emergency_contact_name: profileData.emergency_contact_name,
+          emergency_contact_phone: profileData.emergency_contact_phone,
+        }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to save profile');
       }
       
-      let result;
-      
-      if (existingMember) {
-        // Update existing record
-        const { data, error } = await supabase
-          .from('members')
-          .update({
-            first_name: profileData.first_name,
-            surname: profileData.surname,
-            phone: profileData.phone,
-            address: profileData.address,
-            emergency_contact_name: profileData.emergency_contact_name,
-            emergency_contact_phone: profileData.emergency_contact_phone,
-            updated_at: new Date().toISOString()
-          })
-          .eq('email', profileData.email);
-          
-        if (error) throw error;
-        result = data;
-      } else {
-        // Insert new record
-        const { data, error } = await supabase
-          .from('members')
-          .insert({
-            email: profileData.email,
-            first_name: profileData.first_name,
-            surname: profileData.surname,
-            phone: profileData.phone,
-            address: profileData.address,
-            emergency_contact_name: profileData.emergency_contact_name,
-            emergency_contact_phone: profileData.emergency_contact_phone,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-          
-        if (error) throw error;
-        result = data;
-      }
+      const updatedProfile = await res.json();
+      console.log('Profile updated successfully:', updatedProfile);
       
       setSuccess('Profile updated successfully');
     } catch (err) {

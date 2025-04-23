@@ -194,7 +194,17 @@ export default function AuthStatus() {
         alert('Failed to log out. Please try again.');
       } else {
         console.log('Successfully signed out');
-        // Don't navigate here - let the auth state change listener handle it
+        // Force clear any local storage items that might be persisting the session
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('sadrc-membership-auth');
+          localStorage.removeItem('supabase.auth.token');
+        }
+        // Force navigation to home page after logout
+        router.push('/');
+        // Force reload the page to clear any in-memory state
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
       }
     } catch (err) {
       console.error('Unexpected error during logout:', err);
