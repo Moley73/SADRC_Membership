@@ -11,54 +11,78 @@ export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [debugInfo, setDebugInfo] = useState(null);
   const [error, setError] = useState(null);
+  const [timeoutReached, setTimeoutReached] = useState(false);
 
   useEffect(() => {
+    let didTimeout = false;
+    let timeoutId;
+    let authListener;
+
+    // Helper to ensure loading always ends
+    const finishLoading = () => {
+      setLoading(false);
+      setTimeoutReached(false);
+    };
+
+    // Timeout for the whole check (auth + membership)
+    timeoutId = setTimeout(() => {
+      didTimeout = true;
+      setTimeoutReached(true);
+      setLoading(false);
+      setError('Membership check is taking longer than expected. Please try again later.');
+    }, 7000); // 7 seconds
+
     const checkDatabase = async () => {
       try {
-        // Get current user
-        const { data, error: authError } = await supabase.auth.getUser();
-        
+        // Auth check with timeout
+        const authTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Auth check timed out')), 4000)
+        );
+        const userPromise = supabase.auth.getUser();
+        let data, authError;
+        try {
+          ({ data, error: authError } = await Promise.race([userPromise, authTimeout]));
+        } catch (e) {
+          setIsAuthenticated(false);
+          setDebugInfo({ error: e.message });
+          setError('Login check timed out.');
+          finishLoading();
+          return;
+        }
+
         if (authError) {
           console.error('Error getting user:', authError);
           setIsAuthenticated(false);
-          setLoading(false);
+          finishLoading();
           return;
         }
-        
         const user = data?.user;
-        
         if (!user) {
           console.log('No user logged in');
           setIsAuthenticated(false);
           setDebugInfo({ error: 'No user logged in' });
-          setLoading(false);
+          finishLoading();
           return;
         }
-        
         setIsAuthenticated(true);
         console.log('Current user:', user.email);
-        
-        // Check for user's membership
+
+        // Membership check with timeout
         try {
-          // Set a timeout to prevent infinite loading
-          const timeoutPromise = new Promise((_, reject) => 
+          const membershipTimeout = new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Membership check timed out')), 5000)
           );
-          
           const membershipPromise = supabase
             .from('members')
             .select('id, email, first_name, surname')
             .eq('email', user.email)
             .maybeSingle();
-            
-          // Race the database query against the timeout
           const { data: memberData, error: memberError } = await Promise.race([
             membershipPromise,
-            timeoutPromise
+            membershipTimeout
           ]);
-            
+
           if (memberError) {
-            // If the error is that the table doesn't exist, don't show an error
             if (memberError.code === '42P01' || 
                 memberError.message?.includes('relation') || 
                 memberError.message?.includes('does not exist')) {
@@ -78,7 +102,6 @@ export default function Home() {
               memberDetails: memberData
             });
           } else {
-            // Special case for Brian's email
             if (user.email.toLowerCase().includes('briandarrington') || 
                 user.email.toLowerCase().includes('btinternet.com')) {
               console.log('Special case for admin - setting hasMembership to true');
@@ -89,7 +112,6 @@ export default function Home() {
                 specialCase: true
               });
             } else {
-              // No membership found
               console.log('No membership found for user');
               setHasMembership(false);
               setDebugInfo({ 
@@ -100,13 +122,11 @@ export default function Home() {
           }
         } catch (err) {
           console.error('Error checking membership:', err);
-          // Don't show error UI for missing tables or timeouts
           if (err.message && (
               err.message.includes("relation") || 
               err.message.includes("does not exist") ||
               err.message.includes("timed out"))) {
             console.log('Setting default membership state due to error:', err.message);
-            // For admin users, default to having membership
             if (user.email.toLowerCase().includes('briandarrington') || 
                 user.email.toLowerCase().includes('btinternet.com')) {
               setHasMembership(true);
@@ -122,14 +142,15 @@ export default function Home() {
         console.error('Exception checking database:', err);
         setError('An unexpected error occurred');
       } finally {
-        setLoading(false);
+        finishLoading();
+        clearTimeout(timeoutId);
       }
     };
-    
+
     checkDatabase();
-    
+
     // Listen for auth state changes to re-check membership when user logs in
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+    const authObj = supabase.auth.onAuthStateChange((event) => {
       console.log('Auth state changed:', event);
       if (event === 'SIGNED_IN') {
         setIsAuthenticated(true);
@@ -139,14 +160,16 @@ export default function Home() {
         setHasMembership(false);
       }
     });
-    
+    authListener = authObj?.data?.subscription;
+
     return () => {
-      if (authListener?.subscription) {
-        authListener.subscription.unsubscribe();
+      if (authListener) {
+        authListener.unsubscribe();
       }
+      clearTimeout(timeoutId);
     };
-  }, []); // Empty dependency array to run only once
-  
+  }, []);
+
   const handleMembershipFound = (exists) => {
     setHasMembership(exists);
   };
@@ -169,7 +192,13 @@ export default function Home() {
         
         <Box sx={{ mt: 6 }}>
           {loading ? (
-            <Typography>Checking membership status...</Typography>
+            timeoutReached ? (
+              <Alert severity="warning">
+                Membership check is taking longer than expected. Please refresh or try again later.
+              </Alert>
+            ) : (
+              <Typography>Checking membership status...</Typography>
+            )
           ) : !isAuthenticated ? (
             // User is not logged in
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>

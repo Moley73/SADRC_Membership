@@ -46,6 +46,19 @@ npm run dev
 - `/lib` — Supabase client and helpers
 - `/public/pdfs` — PDF files
 
+## Environment Variables & Security
+
+This project uses [Supabase](https://supabase.com) for authentication and database access. **By design, the following environment variables are public and will be embedded in the client-side JavaScript bundle:**
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+These are required for the frontend to interact with Supabase and are safe to expose. **Do not share your Supabase Service Role Key or any other private secrets in frontend code.**
+
+- `SUPABASE_SERVICE_ROLE_KEY` (if used) must only be referenced in server-side code (API routes or backend helpers). Never expose this key to the client.
+
+**If you see secret scanning warnings in Netlify or other CI/CD tools for the above public keys, you can safely acknowledge or ignore them.**
+
 ---
 
-_Last updated: 2025-04-15_
+_Last updated: 2025-04-21_
