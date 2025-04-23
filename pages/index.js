@@ -6,451 +6,91 @@ import {
 import Link from 'next/link';
 import UpdateButton from '../components/UpdateButton';
 import { useState, useEffect } from 'react';
-import { supabase, debugAuthState, testTableAccess, isAdminEmail } from '../lib/supabaseClient';
+import { supabase, debugAuthState, testTableAccess } from '../lib/supabaseClient';
 import DirectionsRunIcon from '@mui/icons-material/DirectionsRun';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import PersonIcon from '@mui/icons-material/Person';
 import { useRouter } from 'next/router';
 import dayjs from 'dayjs';
+import { useAuthContext } from '../lib/AuthContext';
+import { useMembership } from '../lib/useMembership';
+
+function checkAvatarInDOM() {
+  if (typeof window !== 'undefined') {
+    const avatarElement = document.querySelector('.MuiAvatar-root');
+    if (avatarElement) {
+      console.log('Avatar detected in DOM, user is logged in');
+      return true;
+    }
+  }
+  return false;
+}
 
 export default function Home() {
-  const [hasMembership, setHasMembership] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [debugInfo, setDebugInfo] = useState(null);
-  const [error, setError] = useState(null);
-  const [timeoutReached, setTimeoutReached] = useState(false);
-  const [memberDetails, setMemberDetails] = useState(null);
-  const [debugMode, setDebugMode] = useState(false);
-  const [diagnosticInfo, setDiagnosticInfo] = useState(null);
-  const theme = useTheme();
   const router = useRouter();
-
-  useEffect(() => {
-    let didTimeout = false;
-    let timeoutId;
-    let authListener;
-
-    // Helper to ensure loading always ends
-    const finishLoading = () => {
-      setLoading(false);
-      setTimeoutReached(false);
-    };
-
-    // Check if avatar is visible in the DOM (indicates user is logged in)
-    const checkAvatarInDOM = () => {
-      if (typeof window !== 'undefined') {
-        const avatarElement = document.querySelector('.MuiAvatar-root');
-        if (avatarElement) {
-          console.log('Avatar detected in DOM, user is logged in');
-          return true;
-        }
-      }
-      return false;
-    };
-
-    // Timeout for the whole check (auth + membership)
-    timeoutId = setTimeout(() => {
-      didTimeout = true;
-      setTimeoutReached(true);
-      // Even if the auth check timed out, check if avatar is visible
-      if (checkAvatarInDOM()) {
-        setIsAuthenticated(true);
-        setError(null);
-        finishLoading(); // Ensure loading always ends
-      } else {
-        setLoading(false);
-        setError('Membership check is taking longer than expected. Please try again later.');
-      }
-    }, 7000); // 7 seconds
-
-    const checkDatabase = async () => {
-      try {
-        // First check if avatar is visible (fastest way to detect logged in state)
-        if (checkAvatarInDOM()) {
-          setIsAuthenticated(true);
-          
-          // Continue with membership check
-          try {
-            // Get user email from supabase or from localStorage as fallback
-            let userEmail = null;
-            
-            // Try to get user from Supabase
-            const { data: userData } = await supabase.auth.getUser();
-            if (userData?.user?.email) {
-              userEmail = userData.user.email;
-            } else {
-              // Fallback: Try to get from session
-              const { data: sessionData } = await supabase.auth.getSession();
-              if (sessionData?.session?.user?.email) {
-                userEmail = sessionData.session.user.email;
-              }
-            }
-            
-            if (!userEmail) {
-              console.log('Could not determine user email');
-              finishLoading();
-              return;
-            }
-            
-            console.log('Current user:', userEmail);
-            
-            // Make email search case-insensitive by converting to lowercase
-            const userEmailLower = userEmail.toLowerCase();
-            console.log('Searching for membership with lowercase email:', userEmailLower);
-            
-            // SPECIAL CASE: Use the helper function for admin detection
-            if (isAdminEmail(userEmail)) {
-              console.log('Detected admin email via helper function, overriding membership check');
-              setHasMembership(true);
-              // Create a mock member details for admin
-              setMemberDetails({
-                first_name: 'Brian',
-                surname: 'Darrington',
-                email: userEmail,
-                membership_type: 'club',
-                membership_status: 'active',
-                membership_expiry: dayjs().add(1, 'year').format('YYYY-MM-DD'),
-                ea_number: 'Admin'
-              });
-              finishLoading();
-              return;
-            }
-            
-            // Membership check with timeout
-            const membershipTimeout = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Membership check timed out')), 5000)
-            );
-            
-            const membershipPromise = supabase
-              .from('members')
-              .select('*')
-              .ilike('email', userEmailLower) // Use ilike for case-insensitive matching
-              .maybeSingle();
-            
-            const { data: memberData, error: memberError } = await Promise.race([
-              membershipPromise,
-              membershipTimeout
-            ]);
-
-            if (memberError) {
-              if (memberError.code === '42P01' || 
-                  memberError.message?.includes('relation') || 
-                  memberError.message?.includes('does not exist')) {
-                console.log('Members table does not exist yet');
-                setHasMembership(false);
-                setDebugInfo({ error: 'Members table does not exist yet' });
-              } else {
-                console.error('Error fetching membership:', memberError);
-                setError('Failed to check membership status');
-              }
-            } else if (memberData) {
-              console.log('Found membership for user:', memberData);
-              setHasMembership(true);
-              setMemberDetails(memberData);
-            } else {
-              console.log('No membership found for user');
-              setHasMembership(false);
-            }
-          } catch (err) {
-            console.error('Error in membership check:', err);
-            setError('Error checking membership status');
-          }
-          
-          finishLoading();
-          return;
-        }
-        
-        // If avatar not found, proceed with traditional auth check
-        // Auth check with timeout
-        const authTimeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth check timed out')), 4000)
-        );
-        const userPromise = supabase.auth.getUser();
-        let data, authError;
-        try {
-          ({ data, error: authError } = await Promise.race([userPromise, authTimeout]));
-        } catch (e) {
-          // One more check for avatar before giving up
-          if (checkAvatarInDOM()) {
-            setIsAuthenticated(true);
-            setError(null);
-            finishLoading();
-            // Retry membership check
-            checkDatabase();
-            return;
-          }
-          
-          setError('Authentication check timed out or failed. Please try logging in again.');
-          setLoading(false);
-          return;
-        }
-
-        if (authError) {
-          console.error('Error getting user:', authError);
-          setIsAuthenticated(false);
-          finishLoading();
-          return;
-        }
-        const user = data?.user;
-        if (!user) {
-          console.log('No user logged in');
-          setIsAuthenticated(false);
-          setDebugInfo({ error: 'No user logged in' });
-          finishLoading();
-          return;
-        }
-        setIsAuthenticated(true);
-        console.log('Current user:', user.email);
-
-        // Make email search case-insensitive by converting to lowercase
-        const userEmailLower = user.email.toLowerCase();
-        console.log('Searching for membership with lowercase email:', userEmailLower);
-        
-        // SPECIAL CASE: Use the helper function for admin detection
-        if (isAdminEmail(user.email)) {
-          console.log('Detected admin email via helper function, overriding membership check');
-          setHasMembership(true);
-          // Create a mock member details for admin
-          setMemberDetails({
-            first_name: 'Brian',
-            surname: 'Darrington',
-            email: user.email,
-            membership_type: 'club',
-            membership_status: 'active',
-            membership_expiry: dayjs().add(1, 'year').format('YYYY-MM-DD'),
-            ea_number: 'Admin'
-          });
-          finishLoading();
-          return;
-        }
-        
-        // Membership check with timeout
-        try {
-          const membershipTimeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Membership check timed out')), 5000)
-          );
-          
-          const membershipPromise = supabase
-            .from('members')
-            .select('*')
-            .ilike('email', userEmailLower) // Use ilike for case-insensitive matching
-            .maybeSingle();
-          
-          const { data: memberData, error: memberError } = await Promise.race([
-            membershipPromise,
-            membershipTimeout
-          ]);
-
-          if (memberError) {
-            if (memberError.code === '42P01' || 
-                memberError.message?.includes('relation') || 
-                memberError.message?.includes('does not exist')) {
-              console.log('Members table does not exist yet');
-              setHasMembership(false);
-              setDebugInfo({ error: 'Members table does not exist yet' });
-            } else {
-              console.error('Error fetching membership:', memberError);
-              setError('Failed to check membership status');
-              
-              // Fallback for admin users even if membership check fails
-              if (isAdminEmail(user.email)) {
-                console.log('Error in membership check but admin detected, setting admin membership');
-                setHasMembership(true);
-                setMemberDetails({
-                  first_name: 'Brian',
-                  surname: 'Darrington',
-                  email: user.email,
-                  membership_type: 'club',
-                  membership_status: 'active',
-                  membership_expiry: dayjs().add(1, 'year').format('YYYY-MM-DD'),
-                  ea_number: 'Admin'
-                });
-              }
-            }
-          } else if (memberData) {
-            console.log('Found membership for user:', memberData);
-            setHasMembership(true);
-            setMemberDetails(memberData);
-            setDebugInfo({ 
-              currentUser: user.email,
-              memberFound: true,
-              memberDetails: memberData
-            });
-          } else {
-            if (isAdminEmail(user.email)) {
-              console.log('Special case for admin - setting hasMembership to true');
-              setHasMembership(true);
-              setDebugInfo({ 
-                currentUser: user.email,
-                memberFound: false,
-                specialCase: true
-              });
-              // Create a mock member details for admin
-              setMemberDetails({
-                first_name: 'Brian',
-                surname: 'Darrington',
-                email: user.email,
-                membership_type: 'club',
-                membership_status: 'active',
-                membership_expiry: dayjs().add(1, 'year').format('YYYY-MM-DD'),
-                ea_number: 'Admin'
-              });
-            } else {
-              console.log('No membership found for user:', user.email);
-              setHasMembership(false);
-              setDebugInfo({ 
-                currentUser: user.email,
-                memberFound: false
-              });
-            }
-          }
-        } catch (err) {
-          console.error('Error in membership check:', err);
-          if (err.message?.includes('timed out')) {
-            setError('Membership check timed out. Please try again later.');
-            console.log('Setting default membership state due to error:', err.message);
-            if (isAdminEmail(user.email)) {
-              console.log('Timeout detected but admin user recognized, setting membership');
-              setHasMembership(true);
-              setMemberDetails({
-                first_name: 'Brian',
-                surname: 'Darrington',
-                email: user.email,
-                membership_type: 'club',
-                membership_status: 'active', 
-                membership_expiry: dayjs().add(1, 'year').format('YYYY-MM-DD'),
-                ea_number: 'Admin'
-              });
-            } else {
-              setHasMembership(false);
-            }
-            setDebugInfo({ error: err.message });
-          } else {
-            setError('Failed to check membership status');
-          }
-        }
-      } catch (err) {
-        console.error('Exception checking database:', err);
-        setError('An unexpected error occurred');
-      } finally {
-        finishLoading();
-        clearTimeout(timeoutId);
-      }
-    };
-
-    checkDatabase();
-
-    // Listen for auth state changes to re-check membership when user logs in
-    const authObj = supabase.auth.onAuthStateChange((event) => {
-      console.log('Auth state changed:', event);
-      if (event === 'SIGNED_IN') {
-        setIsAuthenticated(true);
-        checkDatabase();
-      } else if (event === 'SIGNED_OUT') {
-        setIsAuthenticated(false);
-        setHasMembership(false);
-        setMemberDetails(null);
-      }
-    });
-    authListener = authObj?.data?.subscription;
-
-    return () => {
-      if (authListener) {
-        authListener.unsubscribe();
-      }
-      clearTimeout(timeoutId);
-    };
-  }, []);
-
-  const handleMembershipFound = (exists) => {
-    setHasMembership(exists);
-  };
-
-  // Helper function to get membership status chip
-  const getMembershipStatusChip = (status) => {
-    if (!status) return <Chip label="Unknown" color="default" size="small" />;
-    
-    switch(status.toLowerCase()) {
-      case 'active':
-        return <Chip label="Active" color="success" size="small" />;
-      case 'pending':
-        return <Chip label="Pending" color="warning" size="small" />;
-      case 'expired':
-        return <Chip label="Expired" color="error" size="small" />;
-      default:
-        return <Chip label={status} color="default" size="small" />;
-    }
-  };
-
-  // Helper function to format membership type
-  const formatMembershipType = (type) => {
-    if (!type) return 'Unknown';
-    
-    switch(type.toLowerCase()) {
-      case 'club':
-        return 'Club Membership';
-      case 'ea':
-        return 'Club + EA Affiliation';
-      case 'second_claim':
-        return 'Second Claim';
-      default:
-        return type;
-    }
-  };
+  // Use our new authentication hooks
+  const { user, loading: authLoading, isAdmin } = useAuthContext();
+  const { membershipData, hasMembership, loading: membershipLoading, error, refreshMembership } = useMembership();
+  
+  // Local state
+  const [debugMode, setDebugMode] = useState(false);
+  const [debugInfo, setDebugInfo] = useState({});
+  const [runningDiagnostics, setRunningDiagnostics] = useState(false);
+  
+  // Derived loading state
+  const loading = authLoading || membershipLoading;
 
   const runDiagnostics = async () => {
-    setDiagnosticInfo({ status: 'running' });
+    if (!user) {
+      setDebugInfo({ error: 'User not authenticated' });
+      return;
+    }
+    
+    setRunningDiagnostics(true);
+    
     try {
-      // Get auth state
+      // Test the auth state
       const authState = await debugAuthState();
       
-      // Only proceed with table tests if we have a user
-      let tableTests = {};
-      if (authState.hasUser && authState.userEmail) {
-        // Test critical tables
-        const memberTest = await testTableAccess('members', authState.userEmail);
-        const adminTest = await testTableAccess('admin_list', authState.userEmail);
-        const userRolesTest = await testTableAccess('user_roles', authState.userEmail);
-        
-        tableTests = {
-          members: memberTest,
-          admin_list: adminTest,
-          user_roles: userRolesTest
-        };
-      }
+      // Test table access
+      const tableAccess = await testTableAccess();
       
-      // Gather all diagnostics
-      const info = {
-        status: 'complete',
-        timestamp: new Date().toISOString(),
+      setDebugInfo({
+        user: user.email,
         authState,
-        tableAccess: tableTests,
-        browserInfo: {
-          userAgent: navigator.userAgent,
-          language: navigator.language,
-          cookiesEnabled: navigator.cookieEnabled
-        }
-      };
-      
-      setDiagnosticInfo(info);
-      console.log('Diagnostic results:', info);
-      
-      // If there are obvious issues, set an error message
-      if (!authState.hasUser) {
-        setError('Authentication issue: No user found in session');
-      } else if (tableTests.members && !tableTests.members.success) {
-        setError(`Members table access issue: ${tableTests.members.error?.message || 'Unknown error'}`);
-      }
-      
-    } catch (err) {
-      console.error('Error running diagnostics:', err);
-      setDiagnosticInfo({
-        status: 'error',
-        error: err.message
+        tableAccess
       });
+    } catch (err) {
+      setDebugInfo({ error: err.message });
+    } finally {
+      setRunningDiagnostics(false);
     }
+  };
+
+  // Calculate membership expiry date in human-readable format
+  const formatExpiryDate = () => {
+    if (!membershipData?.membership_expiry) return 'Not set';
+    
+    const expiryDate = dayjs(membershipData.membership_expiry);
+    const now = dayjs();
+    const daysRemaining = expiryDate.diff(now, 'day');
+    
+    if (daysRemaining < 0) {
+      return `Expired ${Math.abs(daysRemaining)} days ago`;
+    } else if (daysRemaining === 0) {
+      return 'Expires today';
+    } else if (daysRemaining === 1) {
+      return 'Expires tomorrow';
+    } else {
+      return `Expires in ${daysRemaining} days`;
+    }
+  };
+
+  // Format a membership status with proper capitalization
+  const formatStatus = (status) => {
+    if (!status) return 'Unknown';
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
   };
 
   return (
@@ -487,7 +127,7 @@ export default function Home() {
                 we have something for everyone.
               </Typography>
               
-              {!isAuthenticated && (
+              {!user && (
                 <Box sx={{ mt: 4 }}>
                   <Button 
                     variant="contained" 
@@ -564,13 +204,13 @@ export default function Home() {
         ) : (
           <>
             {/* Membership Dashboard */}
-            {isAuthenticated && (
+            {user && (
               <Box sx={{ mb: 6 }}>
                 <Typography variant="h4" component="h2" gutterBottom fontWeight={600} sx={{ mb: 3 }}>
                   My Membership
                 </Typography>
                 
-                {hasMembership && memberDetails ? (
+                {hasMembership && membershipData ? (
                   <Paper 
                     elevation={2} 
                     sx={{ 
@@ -594,26 +234,30 @@ export default function Home() {
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Avatar 
                           sx={{ 
-                            bgcolor: theme.palette.primary.main,
-                            color: theme.palette.primary.contrastText,
+                            bgcolor: 'primary.main',
+                            color: 'primary.contrastText',
                             width: 60,
                             height: 60,
                             mr: 2
                           }}
                         >
-                          {memberDetails.first_name?.charAt(0)}{memberDetails.surname?.charAt(0)}
+                          {membershipData.first_name?.charAt(0)}{membershipData.surname?.charAt(0)}
                         </Avatar>
                         <Box>
                           <Typography variant="h5" fontWeight={600}>
-                            {memberDetails.first_name} {memberDetails.surname}
+                            {membershipData.first_name} {membershipData.surname}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {memberDetails.email}
+                            {membershipData.email}
                           </Typography>
                         </Box>
                       </Box>
                       <Box>
-                        {getMembershipStatusChip(memberDetails.membership_status || 'active')}
+                        <Chip 
+                          label={formatStatus(membershipData.membership_status || 'active')} 
+                          color={membershipData.membership_status === 'active' ? 'success' : 'warning'}
+                          size="small"
+                        />
                       </Box>
                     </Box>
                     
@@ -626,7 +270,7 @@ export default function Home() {
                                 Membership Type
                               </Typography>
                               <Typography variant="body1" fontWeight={500}>
-                                {formatMembershipType(memberDetails.membership_type)}
+                                {membershipData.membership_type || 'Standard'}
                               </Typography>
                             </CardContent>
                           </Card>
@@ -641,9 +285,7 @@ export default function Home() {
                               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                 <CalendarTodayIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
                                 <Typography variant="body1" fontWeight={500}>
-                                  {memberDetails.membership_expiry ? 
-                                    dayjs(memberDetails.membership_expiry).format('DD/MM/YYYY') : 
-                                    'Not set'}
+                                  {formatExpiryDate()}
                                 </Typography>
                               </Box>
                             </CardContent>
@@ -657,7 +299,7 @@ export default function Home() {
                                 EA Number
                               </Typography>
                               <Typography variant="body1" fontWeight={500}>
-                                {memberDetails.ea_number || 'Not registered'}
+                                {membershipData.ea_number || 'Not registered'}
                               </Typography>
                             </CardContent>
                           </Card>
@@ -716,42 +358,33 @@ export default function Home() {
                       Apply for Membership
                     </Button>
                     
-                    {process.env.NODE_ENV === 'development' || isAdminEmail(router.query.email) ? (
+                    {(process.env.NODE_ENV === 'development' || isAdmin) && (
                       <Box sx={{ mt: 4, p: 2, border: 1, borderColor: 'grey.300', borderRadius: 1 }}>
                         <Typography variant="h6">Debug Info:</Typography>
-                        <Typography variant="body1">Email: {router.query.email}</Typography>
-                        <Typography variant="body1">Is Admin Email: {isAdminEmail(router.query.email) ? 'Yes' : 'No'}</Typography>
-                        <Typography variant="body1">Auth State: {isAuthenticated ? 'Authenticated' : 'Not authenticated'}</Typography>
+                        <Typography variant="body1">Email: {user?.email}</Typography>
+                        <Typography variant="body1">Is Admin: {isAdmin ? 'Yes' : 'No'}</Typography>
+                        <Typography variant="body1">Auth State: {user ? 'Authenticated' : 'Not authenticated'}</Typography>
                         <Button 
                           variant="contained" 
                           color="secondary" 
                           size="small"
                           onClick={() => {
                             console.log('Manual admin override triggered');
-                            setHasMembership(true);
-                            setMemberDetails({
-                              first_name: 'Brian',
-                              surname: 'Darrington',
-                              email: router.query.email,
-                              membership_type: 'club',
-                              membership_status: 'active',
-                              membership_expiry: dayjs().add(1, 'year').format('YYYY-MM-DD'),
-                              ea_number: 'Admin'
-                            });
+                            refreshMembership();
                           }}
                           sx={{ mt: 2 }}
                         >
-                          Force Admin Access
+                          Force Refresh Membership
                         </Button>
                       </Box>
-                    ) : null}
+                    )}
                   </Paper>
                 )}
               </Box>
             )}
             
             {/* Original content for non-authenticated users */}
-            {!isAuthenticated && (
+            {!user && (
               <Box sx={{ mt: 6, textAlign: 'center' }}>
                 <Typography variant="h5" component="h2" gutterBottom>
                   Please log in to access membership features.
@@ -760,7 +393,7 @@ export default function Home() {
             )}
             
             {/* Debug panel */}
-            {isAuthenticated && !hasMembership && (
+            {user && !hasMembership && (
               <Box mt={4} textAlign="center">
                 <Button 
                   variant="outlined" 
@@ -785,7 +418,7 @@ export default function Home() {
                       Run Diagnostics
                     </Button>
                     
-                    {diagnosticInfo && (
+                    {debugInfo && (
                       <Box mt={2} textAlign="left" 
                         sx={{ 
                           maxHeight: '300px', 
@@ -796,7 +429,7 @@ export default function Home() {
                           fontFamily: 'monospace'
                         }}
                       >
-                        <pre>{JSON.stringify(diagnosticInfo, null, 2)}</pre>
+                        <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
                       </Box>
                     )}
                   </Box>
