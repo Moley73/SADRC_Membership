@@ -102,15 +102,21 @@ export default function ManagePage() {
     }
   };
 
+  // Fetch members from API with authentication
   const fetchMembers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('members')
-        .select('id, email, first_name, surname')
-        .order('surname', { ascending: true });
-        
-      if (error) throw error;
-      
+      // Get the current session and access token
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const res = await fetch('/api/members', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!res.ok) throw new Error('Failed to fetch members');
+      const data = await res.json();
       setMembers(data || []);
     } catch (err) {
       console.error('Error fetching members:', err);

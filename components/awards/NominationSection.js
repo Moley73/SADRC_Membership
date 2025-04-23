@@ -28,11 +28,34 @@ export default function NominationSection({ categories }) {
       try {
         setLoading(true);
         
-        // Get the current session to include the token in the request
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
+        // Get the current session and access token
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
         
-        console.log('Fetching members with token:', token ? 'Token available' : 'No token');
+        if (!token) {
+          throw new Error('Authentication required');
+        }
+        
+        try {
+          const response = await fetch('/api/members?for=awards', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (response.ok) {
+            const membersData = await response.json();
+            console.log(`Successfully fetched ${membersData.length} members via API`);
+            setMembers(membersData);
+            return;
+          }
+        } catch (fallbackError) {
+          console.error('Fallback members fetch failed:', fallbackError);
+        }
+        
+        // If we get here, the API endpoint failed, so try direct Supabase query
+        console.log('Attempting to fetch members using Supabase query as fallback');
         
         const { data, error } = await supabase
           .from('members')

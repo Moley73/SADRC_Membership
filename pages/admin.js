@@ -89,34 +89,24 @@ export default function AdminPage() {
     }
   }, [members, searchTerm, activeFilter]);
 
+  // Fetch members from API with authentication
   const fetchMembers = async () => {
-    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('members')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('Error fetching members:', error);
-        setError(error.message);
-      } else if (data) {
-        // Add default properties if they don't exist
-        const processedData = data.map(member => ({
-          ...member,
-          payment_status: member.payment_status || 'unpaid',
-          membership_status: member.membership_status || 'pending',
-          membership_expiry: member.membership_expiry || null
-        }));
-        
-        setMembers(processedData);
-        setFilteredMembers(processedData);
-      }
+      // Get the current session and access token
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const res = await fetch('/api/members', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!res.ok) throw new Error('Failed to fetch members');
+      const data = await res.json();
+      setMembers(data || []);
     } catch (err) {
-      console.error('Unexpected error:', err);
-      setError('Failed to load members. Please try again.');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching members:', err);
     }
   };
 
