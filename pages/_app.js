@@ -37,6 +37,10 @@ export default function App({ Component, pageProps }) {
   }), []);
   
   const theme = useMemo(() => getTheme(mode), [mode]);
+
+  useEffect(() => {
+    document.body.style.backgroundColor = theme.palette.background.default;
+  }, [theme]);
   
   // Use the theme after it's initialized
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -148,10 +152,10 @@ function AppContent({
               <Typography 
                 variant="h6" 
                 component="div" 
-                noWrap
                 sx={{ 
                   flexGrow: 1, 
                   minWidth: 0,
+                  mr: 1,
                   fontWeight: 700, 
                   color: 'primary.main',
                   display: 'flex', 
@@ -162,9 +166,12 @@ function AppContent({
                   color="inherit" 
                   href="/" 
                   underline="none"
+                  noWrap
                   sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center',
+                    display: 'block',
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                     '&:hover': {
                       color: 'primary.dark'
                     }
@@ -281,7 +288,7 @@ function AppContent({
                   </Box>
                 </Box>
               ) : (
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                   <Box sx={{ mx: 0.5 }}>
                     <ColorModeToggle />
                   </Box>
