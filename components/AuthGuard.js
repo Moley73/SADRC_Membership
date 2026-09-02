@@ -6,11 +6,6 @@ import { Box, CircularProgress, Typography, Alert, Button } from '@mui/material'
 
 const PUBLIC_ROUTES = ['/login', '/register', '/reset-password'];
 
-const isBrianEmail = (email) => {
-  const lower = (email || '').toLowerCase();
-  return lower.includes('briandarrington') || lower.includes('btinternet.com');
-};
-
 async function checkRole(email, requiredRole) {
   if (requiredRole !== 'admin' && requiredRole !== 'super_admin') {
     return { authorized: true, error: null };
@@ -28,14 +23,14 @@ async function checkRole(email, requiredRole) {
   }
 
   if (requiredRole === 'super_admin') {
-    const ok = adminData?.role?.toLowerCase().includes('super') || isBrianEmail(email);
+    const ok = !!adminData?.role?.toLowerCase().includes('super');
     return {
       authorized: ok,
       error: ok ? null : 'You need super admin privileges to access this page.'
     };
   }
 
-  const ok = !!adminData || isBrianEmail(email);
+  const ok = !!adminData;
   return {
     authorized: ok,
     error: ok ? null : 'You need admin privileges to access this page.'

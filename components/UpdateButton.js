@@ -22,15 +22,6 @@ export default function UpdateButton({ onMembershipFound }) {
         
         console.log('Checking membership for user:', user.email);
         
-        // Force check for briandarrington@btinternet.com specifically
-        if (user.email.toLowerCase().includes('briandarrington')) {
-          console.log('Found Brian Darrington - setting membership to true');
-          setHasMembership(true);
-          setLoading(false);
-          if (onMembershipFound) onMembershipFound(true);
-          return;
-        }
-        
         // Continue with normal checks for other users
         // Try a more flexible approach - search with ILIKE for partial email match
         let { data, error } = await supabase

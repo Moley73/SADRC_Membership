@@ -29,9 +29,7 @@ export default async function handler(req, res) {
       .eq('email', user.email)
       .maybeSingle();
     
-    // Always allow the hardcoded super admin
-    const isSuperAdmin = adminData?.role?.toLowerCase().includes('super') || 
-                        user.email === 'briandarrington@btinternet.com';
+    const isSuperAdmin = !!adminData?.role?.toLowerCase().includes('super');
     
     if (!isSuperAdmin) {
       return res.status(403).json({ error: 'Not authorized. Super admin access required.' });

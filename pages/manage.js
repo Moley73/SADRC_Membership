@@ -32,6 +32,7 @@ export default function ManagePage() {
   const [addUserDialog, setAddUserDialog] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserRole, setNewUserRole] = useState('admin');
+  const [currentUserEmail, setCurrentUserEmail] = useState(null);
 
   useEffect(() => {
     fetchUsers();
@@ -45,6 +46,7 @@ export default function ManagePage() {
       
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUserEmail(user?.email?.toLowerCase() || null);
       
       if (!user) {
         setError('You must be logged in to view this page');
@@ -60,16 +62,7 @@ export default function ManagePage() {
         
       if (error) {
         console.error('Error fetching admin list:', error);
-        // Fallback to hardcoded data
-        const hardcodedUsers = [{
-          id: '1',
-          email: 'briandarrington@btinternet.com',
-          role: 'super_admin',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }];
-        
-        setUsers(hardcodedUsers);
+        setError('Failed to load user roles. Please try again.');
       } else {
         // Process data to ensure consistent structure
         const processedData = (data || []).map(admin => {
@@ -87,18 +80,6 @@ export default function ManagePage() {
       console.error('Error fetching users:', err);
       setError('Failed to load user roles. Please try again.');
       setLoading(false);
-      
-      // Fallback to hardcoded data if API fails
-      const hardcodedUsers = [{
-        id: '1',
-        email: 'briandarrington@btinternet.com',
-        role: 'super_admin',
-        name: 'Brian Darrington',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }];
-      
-      setUsers(hardcodedUsers);
     }
   };
 
@@ -489,7 +470,7 @@ export default function ManagePage() {
                                     <IconButton 
                                       color="primary" 
                                       onClick={() => handleEditRole(user)}
-                                      disabled={user.role === 'super_admin' && user.email === 'briandarrington@btinternet.com'}
+                                      disabled={user.role === 'super_admin' && user.email?.toLowerCase() === currentUserEmail}
                                     >
                                       <EditIcon />
                                     </IconButton>
@@ -500,7 +481,7 @@ export default function ManagePage() {
                                     <IconButton 
                                       color="error" 
                                       onClick={() => handleDeleteUser(user)}
-                                      disabled={user.role === 'super_admin' && user.email === 'briandarrington@btinternet.com'}
+                                      disabled={user.role === 'super_admin' && user.email?.toLowerCase() === currentUserEmail}
                                     >
                                       <DeleteIcon />
                                     </IconButton>
@@ -535,7 +516,7 @@ export default function ManagePage() {
                 value={newRole}
                 label="Role"
                 onChange={(e) => setNewRole(e.target.value)}
-                disabled={selectedUser?.role === 'super_admin' && selectedUser?.email === 'briandarrington@btinternet.com'}
+                disabled={selectedUser?.role === 'super_admin' && selectedUser?.email?.toLowerCase() === currentUserEmail}
               >
                 <MenuItem value="member">Member</MenuItem>
                 <MenuItem value="editor">Editor</MenuItem>
