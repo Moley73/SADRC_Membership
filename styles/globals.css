@@ -11,7 +11,7 @@
 body {
   margin: 0;
   font-family: 'Inter', 'Roboto', sans-serif;
-  background: #F8FAFC;
+  background: #121212;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -21,20 +21,20 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Focus styles for accessibility */
-:focus {
+/* Focus styles for accessibility (keyboard only) */
+:focus-visible {
   outline: 2px solid #FF6B00;
   outline-offset: 2px;
 }
 
-/* Link styles */
-a {
+/* Plain link styles (MUI Links/Buttons manage their own) */
+a:not([class]) {
   color: #FF6B00;
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
-a:hover {
+a:not([class]):hover {
   color: #FF8A3D;
   text-decoration: underline;
 }

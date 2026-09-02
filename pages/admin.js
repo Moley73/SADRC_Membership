@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { supabase, safeGetSession } from '../lib/supabaseClient';
 import { 
   Container, Typography, Box, Alert, CircularProgress, 
-  Table, TableHead, TableRow, TableCell, TableBody, Paper, 
+  Table, TableHead, TableRow, TableCell, TableBody, TableContainer, Paper, 
   Button, Tabs, Tab, TextField, Dialog, DialogTitle, DialogContent, DialogContentText,
   DialogActions, Chip, Grid,
   Card, CardContent, CardActions, Divider, Menu, MenuItem,
@@ -726,6 +726,7 @@ export default function AdminPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </Box>
+          <TableContainer>
           <Table sx={{ minWidth: 650 }} size="small">
             <TableHead>
               <TableRow>
@@ -855,6 +856,7 @@ export default function AdminPage() {
               )}
             </TableBody>
           </Table>
+          </TableContainer>
         </Paper>
         
         {/* Member View Dialog */}

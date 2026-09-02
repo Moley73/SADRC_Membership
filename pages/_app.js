@@ -12,14 +12,27 @@ import MenuIcon from '@mui/icons-material/Menu';
 import Head from 'next/head';
 import { AuthProvider, useAuthContext } from '../lib/AuthContext';
 
+const COLOR_MODE_KEY = 'sadrc-color-mode';
+
 export default function App({ Component, pageProps }) {
   const [mode, setMode] = useState('dark');
   const [mobileMenuAnchorEl, setMobileMenuAnchorEl] = useState(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(COLOR_MODE_KEY);
+    if (stored === 'light' || stored === 'dark') {
+      setMode(stored);
+    }
+  }, []);
   
   const colorMode = useMemo(() => ({
     toggleColorMode: () => {
-      setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
+      setMode((prevMode) => {
+        const next = prevMode === 'light' ? 'dark' : 'light';
+        window.localStorage.setItem(COLOR_MODE_KEY, next);
+        return next;
+      });
     },
   }), []);
   
@@ -135,8 +148,10 @@ function AppContent({
               <Typography 
                 variant="h6" 
                 component="div" 
+                noWrap
                 sx={{ 
                   flexGrow: 1, 
+                  minWidth: 0,
                   fontWeight: 700, 
                   color: 'primary.main',
                   display: 'flex', 

@@ -128,7 +128,7 @@ export default function Home() {
               </Typography>
               
               {!user && (
-                <Box sx={{ mt: 4 }}>
+                <Box sx={{ mt: 4, display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                   <Button 
                     variant="contained" 
                     color="secondary" 
@@ -153,7 +153,6 @@ export default function Home() {
                       borderRadius: 2,
                       px: 4,
                       py: 1.5,
-                      ml: 2,
                       fontWeight: 600,
                       borderColor: 'primary.contrastText',
                       '&:hover': {
