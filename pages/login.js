@@ -1,9 +1,9 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { supabase, refreshSession, isLoggedIn } from '../lib/supabaseClient';
+import { supabase, refreshSession } from '../lib/supabaseClient';
 import { Container, Box, TextField, Button, Typography, Alert, Paper, CircularProgress } from '@mui/material';
 import Head from 'next/head';
-import { AuthContext } from '../contexts/AuthContext';
+import { useAuthContext } from '../lib/AuthContext';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -11,11 +11,9 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('login');
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [sessionRefreshAttempted, setSessionRefreshAttempted] = useState(false);
   const router = useRouter();
   const { returnUrl, mode: urlMode } = router.query;
-  const { user } = useContext(AuthContext) || {}; // Get global auth state
+  const { user, loading: authLoading } = useAuthContext();
 
   // Set initial mode based on URL parameter
   useEffect(() => {
@@ -122,85 +120,15 @@ export default function Login() {
     }
   };
 
-  // Check if user is already logged in
+  // Redirect away if already logged in
   useEffect(() => {
-    let isMounted = true;
-    let checkTimeout = null;
-    
-    const checkSession = async () => {
-      try {
-        setCheckingSession(true);
-        
-        // First check if user is logged in via Supabase
-        const loggedIn = await isLoggedIn();
-        
-        // Also check if the avatar is visible in the header (DOM check)
-        const avatarVisible = typeof window !== 'undefined' && 
-                             document.querySelector('.MuiAvatar-root') !== null;
-        
-        if (isMounted) {
-          if (loggedIn || avatarVisible) {
-            console.log('User is already logged in, redirecting...');
-            // Redirect to returnUrl if provided, otherwise to home
-            const redirectTo = returnUrl || '/';
-            router.push(redirectTo);
-            return;
-          }
-          
-          // If not logged in, try to refresh the session
-          if (!sessionRefreshAttempted) {
-            setSessionRefreshAttempted(true);
-            console.log('Attempting to refresh session...');
-            const session = await refreshSession();
-            
-            if (session && isMounted) {
-              console.log('Session refreshed successfully, redirecting...');
-              // Redirect to returnUrl if provided, otherwise to home
-              const redirectTo = returnUrl || '/';
-              router.push(redirectTo);
-              return;
-            }
-          }
-          
-          setCheckingSession(false);
-        }
-      } catch (err) {
-        console.error('Session check error:', err);
-        if (isMounted) {
-          setCheckingSession(false);
-        }
-      }
-    };
-    
-    checkSession();
-    
-    // Add a safety timeout to prevent infinite loading
-    checkTimeout = setTimeout(() => {
-      if (isMounted && checkingSession) {
-        console.log('Session check timed out, showing login form');
-        
-        // One final check for avatar in header before showing login form
-        const avatarVisible = typeof window !== 'undefined' && 
-                             document.querySelector('.MuiAvatar-root') !== null;
-        
-        if (avatarVisible) {
-          // If avatar is visible but we're still on login page, force redirect
-          console.log('Avatar detected in header, forcing redirect');
-          const redirectTo = returnUrl || '/';
-          window.location.href = redirectTo; // Use direct location change
-        } else {
-          setCheckingSession(false);
-        }
-      }
-    }, 3000); // Reduced to 3 seconds for faster response
-    
-    return () => {
-      isMounted = false;
-      if (checkTimeout) clearTimeout(checkTimeout);
-    };
-  }, [router, returnUrl, sessionRefreshAttempted]);
+    if (authLoading) return;
+    if (user) {
+      router.replace(returnUrl || '/');
+    }
+  }, [authLoading, user, returnUrl, router]);
 
-  if (checkingSession || user) {
+  if (authLoading || user) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />
