@@ -57,17 +57,6 @@ export default function ViewApplication() {
           }
           
           memberData = data;
-          
-          // Special case for Brian
-          if (!memberData && user.email.toLowerCase().includes('briandarrington')) {
-            const { data: brianData } = await supabase
-              .from('members')
-              .select('*')
-              .eq('email', 'briandarrington@btinternet.com')
-              .maybeSingle();
-              
-            memberData = brianData;
-          }
         }
         
         if (!memberData) {

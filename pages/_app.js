@@ -111,8 +111,7 @@ function AppContent({
           
         if (error) {
           console.error('Error fetching admin status:', error);
-          // Fallback for known super admins
-          setIsSuperAdmin(['briandarrington@btinternet.com'].includes(user.email));
+          setIsSuperAdmin(false);
           return;
         }
         
@@ -121,8 +120,7 @@ function AppContent({
         setIsSuperAdmin(role.includes('super'));
       } catch (err) {
         console.error('Error checking admin role:', err);
-        // Fallback for known super admins
-        setIsSuperAdmin(['briandarrington@btinternet.com'].includes(user.email));
+        setIsSuperAdmin(false);
       }
     };
     
