@@ -1,13 +1,13 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme, responsiveFontSizes } from '@mui/material/styles';
 
-const getTheme = (mode = 'light') => createTheme({
+const getTheme = (mode = 'light') => responsiveFontSizes(createTheme({
   palette: {
     mode,
     primary: {
       main: '#FF6B00', // Vibrant orange - SADRC brand color
       light: '#FF8A3D',
       dark: '#CC5500',
-      contrastText: '#fff',
+      contrastText: '#1E293B',
     },
     secondary: {
       main: '#1E293B', // Dark blue-gray
@@ -399,19 +399,19 @@ const getTheme = (mode = 'light') => createTheme({
     MuiTooltip: {
       styleOverrides: {
         tooltip: {
-          backgroundColor: mode === 'dark' ? '#1E293B' : '#1E293B',
-          color: '#FFFFFF',
+          backgroundColor: mode === 'dark' ? '#F8FAFC' : '#1E293B',
+          color: mode === 'dark' ? '#1E293B' : '#FFFFFF',
           fontSize: '0.75rem',
           fontWeight: 500,
           padding: '8px 12px',
           borderRadius: 4,
         },
         arrow: {
-          color: mode === 'dark' ? '#1E293B' : '#1E293B',
+          color: mode === 'dark' ? '#F8FAFC' : '#1E293B',
         },
       },
     },
   },
-});
+}));
 
 export default getTheme;

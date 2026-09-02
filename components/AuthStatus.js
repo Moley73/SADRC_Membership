@@ -162,7 +162,9 @@ export default function AuthStatus() {
           borderRadius: 4,
           px: 2,
           py: 0.5,
-          fontWeight: 'medium'
+          fontWeight: 'medium',
+          whiteSpace: 'nowrap',
+          flexShrink: 0
         }}
       >
         Log In

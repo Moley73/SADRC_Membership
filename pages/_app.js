@@ -12,18 +12,35 @@ import MenuIcon from '@mui/icons-material/Menu';
 import Head from 'next/head';
 import { AuthProvider, useAuthContext } from '../lib/AuthContext';
 
+const COLOR_MODE_KEY = 'sadrc-color-mode';
+
 export default function App({ Component, pageProps }) {
   const [mode, setMode] = useState('dark');
   const [mobileMenuAnchorEl, setMobileMenuAnchorEl] = useState(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(COLOR_MODE_KEY);
+    if (stored === 'light' || stored === 'dark') {
+      setMode(stored);
+    }
+  }, []);
   
   const colorMode = useMemo(() => ({
     toggleColorMode: () => {
-      setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
+      setMode((prevMode) => {
+        const next = prevMode === 'light' ? 'dark' : 'light';
+        window.localStorage.setItem(COLOR_MODE_KEY, next);
+        return next;
+      });
     },
   }), []);
   
   const theme = useMemo(() => getTheme(mode), [mode]);
+
+  useEffect(() => {
+    document.body.style.backgroundColor = theme.palette.background.default;
+  }, [theme]);
   
   // Use the theme after it's initialized
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -137,6 +154,8 @@ function AppContent({
                 component="div" 
                 sx={{ 
                   flexGrow: 1, 
+                  minWidth: 0,
+                  mr: 1,
                   fontWeight: 700, 
                   color: 'primary.main',
                   display: 'flex', 
@@ -147,9 +166,12 @@ function AppContent({
                   color="inherit" 
                   href="/" 
                   underline="none"
+                  noWrap
                   sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center',
+                    display: 'block',
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                     '&:hover': {
                       color: 'primary.dark'
                     }
@@ -266,7 +288,7 @@ function AppContent({
                   </Box>
                 </Box>
               ) : (
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                   <Box sx={{ mx: 0.5 }}>
                     <ColorModeToggle />
                   </Box>

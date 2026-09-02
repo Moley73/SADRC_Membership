@@ -378,7 +378,9 @@ function ProfilePage() {
           <Tabs 
             value={tabValue} 
             onChange={handleTabChange}
-            variant="fullWidth"
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{ borderBottom: 1, borderColor: 'divider' }}
           >
             <Tab label="Personal Information" />
